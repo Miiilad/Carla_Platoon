@@ -1,0 +1,9 @@
+// .devcontainer/devcontainer.json
+{
+    "name": "docker",
+    "build": {
+      "dockerfile": "Dockerfile"
+    },
+    "remoteUser": "docker",
+    "customizations": {"vscode": {"settings": {"terminal.integrated.defaultProfile.linux": "bash"}}}
+  }

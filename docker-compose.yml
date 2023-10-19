@@ -1,0 +1,60 @@
+version: "3.8"
+services:
+  # main_container:
+  #   build:
+  #     context: ./docker
+  #     dockerfile: ./main_container/Dockerfile
+  #     args:
+  #       - CARLA_VERSION=${CARLA_VERSION:?}
+  #       - CUDA_VERSION=${CUDA_VERSION:?}
+  #     cache_from:
+  #       - faizansana/intersection-driving:cuda-${CUDA_VERSION:?}-carla-${CARLA_VERSION:?}-ros-noetic
+  #   image: faizansana/intersection-driving:cuda-${CUDA_VERSION:?}-carla-${CARLA_VERSION:?}-ros-noetic
+  #   user: ${FIXUID:?}:${FIXGID:?}
+  #   environment:
+  #     - ROS_MASTER_URI=http://rosmaster:11311/
+  #   volumes:
+  #     - ./:/home/docker/src
+  #   depends_on:
+  #     - carla_server
+  #     - carla_server_debug
+
+  carla_server:
+    image: "carlasim/carla:${CARLA_VERSION}"
+    command: /bin/bash -c "SDL_VIDEODRIVER=offscreen && ./CarlaUE4.sh -RenderOffScreen -world-port=2000 -quality-level=${CARLA_QUALITY} -nosound -carla-server -fps=30"
+    restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            device_ids: ['0']
+            capabilities: [gpu]
+
+  # carla_server_debug:
+  #   image: "carlasim/carla:${CARLA_VERSION}"
+  #   command: /bin/bash -c "SDL_VIDEODRIVER=offscreen && ./CarlaUE4.sh -RenderOffScreen -world-port=2000 -quality-level=Epic -nosound -carla-server -fps=30"
+  #   restart: always
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #         - driver: nvidia
+  #           device_ids: ['1']
+  #           capabilities: [gpu]
+
+  carla_ros_bridge:
+    image: mafumaful/carla_ros2_bridge:galactic-carlaversion-0.9.13
+    build: 
+      context: ./docker
+      dockerfile: ./carla_ros2_bridge/Dockerfile
+      cache_from:
+        - mafumaful/carla_ros2_bridge:galactic-carlaversion-0.9.13
+      args:
+        - CARLA_VERSION=${CARLA_VERSION:?}
+    user: ${FIXUID:?}:${FIXGID:?}
+    environment:
+      - CARLA_HOSTNAME=carla_server
+    depends_on:
+      - carla_server
+    
