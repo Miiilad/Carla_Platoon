@@ -19,7 +19,8 @@ FIXGID=$(id -g)
 ## -------------------------- CARLA Version -----------------------
 
 CARLA_VERSION=${CARLA_VERSION:-"0.9.13"}
-CARLA_QUALITY=${CARLA_QUALITY:-"Low"}
+CARLA_QUALITY=${CARLA_QUALITY:-"Epic"}
+# CARLA_QUALITY=${CARLA_QUALITY:-"Low"}
 
 ## -------------------------- CUDA Version ------------------------
 CUDA_VERSION=${CUDA_VERSION:-"11.8.0"}

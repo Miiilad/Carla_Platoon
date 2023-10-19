@@ -45,6 +45,9 @@ services:
 
   carla_ros_bridge:
     image: mafumaful/carla_ros2_bridge:galactic-carlaversion-0.9.13
+    # command: "ros2 launch carla_ros_bridge carla_ros_bridge.launch.py host:='carla_server'"
+    # command: "ros2 launch carla_ros_bridge carla_ros_bridge_with_example_ego_vehicle.launch.py host:='carla_server'"
+    restart: always
     build: 
       context: ./docker
       dockerfile: ./carla_ros2_bridge/Dockerfile
@@ -53,8 +56,11 @@ services:
       args:
         - CARLA_VERSION=${CARLA_VERSION:?}
     user: ${FIXUID:?}:${FIXGID:?}
+    # volumes:
+    #   - /tmp/.X11-unix:/tmp/.X11-unix:rw  # Share the X11 socket
     environment:
       - CARLA_HOSTNAME=carla_server
+      - DISPLAY=:0
     depends_on:
       - carla_server
     

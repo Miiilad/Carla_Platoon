@@ -65,7 +65,7 @@ RUN sudo rm /etc/ros/rosdep/sources.list.d/20-default.list || true && \
 
 # Fix for missing rviz and pcl_ros
 RUN pip install carla==0.9.13 
-RUN sudo apt-get install -y ros-galactic-rviz2 openni2-utils libpcap-dev pcl-tools python3-opencv ros-galactic-pcl-conversions ros-galactic-cv-bridge
+RUN sudo apt-get install -y ros-galactic-rviz2 openni2-utils libpcap-dev pcl-tools python3-opencv ros-galactic-pcl-conversions ros-galactic-cv-bridge ros-galactic-plotjuggler-ros
 WORKDIR /home/docker/carla-ros-bridge/src
 RUN git clone https://github.com/astuff/astuff_sensor_msgs.git
 WORKDIR /home/docker/carla-ros-bridge
@@ -81,7 +81,7 @@ USER root:root
 # Supervisor to manage multiple processes (code-server, roslaunch)
 RUN apt-get install -y wget curl gdb supervisor
 
-COPY --chown=docker ./supervisord.conf /etc/supervisor/supervisord.conf
+COPY --chown=docker ./carla_ros2_bridge/supervisord.conf /etc/supervisor/supervisord.conf
 RUN chown -R docker:docker /etc/supervisor
 RUN chmod 777 /var/log/supervisor/
 
