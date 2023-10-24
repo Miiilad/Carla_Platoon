@@ -40,7 +40,7 @@ for v in world.get_actors().filter('*vehicle*'):
 
 # Add camera sensor
 camera_bp = bp_lib.find('sensor.camera.rgb') 
-camera_init_trans = carla.Transform(carla.Location(z=50))
+camera_init_trans = carla.Transform(carla.Location(z=25),carla.Rotation(pitch=-90))
 camera = world.spawn_actor(camera_bp, camera_init_trans, attach_to=vehicle)
 
 # Add navigation sensor

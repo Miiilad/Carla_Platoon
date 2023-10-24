@@ -64,5 +64,5 @@ services:
     depends_on:
       - carla_server
     volumes:
-      - ./test_sensor:/home/docker/carla-ros-bridge/test_sensor/
+      - ./test:/home/docker/carla-ros-bridge/test/
     
