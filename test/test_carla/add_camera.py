@@ -1,47 +1,3 @@
-# start
-
-First, you should build the project, you can build the project offline or pull the image online:
-
-## build the project
-
-```bash
-# in the workspace, set the environment variable
-chmod +x dev_config.sh
-./dev_config.sh
-
-# build the project offline, option 1
-docker compose build
-# pull the environement online, option 2
-docker compose pull
-```
-
-Use control + c to quit the environment.
-
-## run the project
-
-```bash
-docker compose up -d
-```
-
-## notes
-
-In the docker carla-ros2-bridge, we can specify the host number using "host='carla_server'"
-
-```bash
-ros2 launch carla_ros_bridge carla_ros_bridge.launch.py host:='carla_server'
-```
-
-if you want to see the example, you can use this(you can change it in the docker file):
-
-```bash
-ros2 launch carla_ros_bridge carla_ros_bridge_with_example_ego_vehicle.launch.py host:='carla_server'
-```
-
-# tutorial
-
-## add birdview camera
-
-```python
 import carla
 import cv2
 import numpy as np
@@ -134,4 +90,3 @@ if __name__ == '__main__':
 
     carla_api.terminate()
     cv2.destroyALLWindows()
-```
