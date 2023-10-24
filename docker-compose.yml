@@ -60,7 +60,9 @@ services:
     #   - /tmp/.X11-unix:/tmp/.X11-unix:rw  # Share the X11 socket
     environment:
       - CARLA_HOSTNAME=carla_server
-      - DISPLAY=:0
+      # - DISPLAY=:0
     depends_on:
       - carla_server
+    volumes:
+      - ./test_sensor:/home/docker/carla-ros-bridge/test_sensor/
     
