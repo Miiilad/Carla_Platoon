@@ -8,6 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.misc import get_open_port
 
 # params
+SPAWN_POINT_NUMBER = 70
 IMAGE_HEIGHT = 540 #1080
 IMAGE_WIDTH = 960 #1920
 WINDOW_NAME = 'RGB Camera bird view'
@@ -54,7 +55,7 @@ class carla_apis():
         # self.ego_camera.listen(lambda image: rgb_callback(self.image_data, image))
         self.ego_camera.listen(lambda image: self.rgb_callback(image))
 
-    def spawn_ego_vehicle(self, spawn_points_number: int = 78):
+    def spawn_ego_vehicle(self, spawn_points_number: int = SPAWN_POINT_NUMBER):
         # spawn ego vehicle
         if self.ego_vehicle is None:
             print("spawn ego vehicle...")
