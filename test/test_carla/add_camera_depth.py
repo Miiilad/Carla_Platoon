@@ -12,6 +12,7 @@ SPAWN_POINT_NUMBER = 70
 IMAGE_HEIGHT = 540 #1080
 IMAGE_WIDTH = 960 #1920
 WINDOW_NAME = 'RGB Camera bird view'
+SENSOR_TICK = 0.0
 
 image_size = (IMAGE_HEIGHT, IMAGE_WIDTH, 4)
 
@@ -46,14 +47,18 @@ class carla_apis():
             return
 
         # spawn camera which is attached to vehicle
-        camera_bp = self.blueprint_library.find('sensor.camera.rgb')
+        camera_bp = self.blueprint_library.find('sensor.camera.depth')
         camera_bp.set_attribute('image_size_x', str(IMAGE_WIDTH))
         camera_bp.set_attribute('image_size_y', str(IMAGE_HEIGHT))
         camera_bp.set_attribute('fov', '110')
-        camera_transform = carla.Transform(carla.Location(x=1.5, z=20), carla.Rotation(pitch=-90))
+        camera_bp.set_attribute('sensor_tick', str(SENSOR_TICK))
+        camera_transform = carla.Transform(carla.Location(2,0,1.4), carla.Rotation(0, 0, 0))
+
+        # attach camera to the vehicle
         self.ego_camera = self.world.spawn_actor(camera_bp, camera_transform, attach_to=self.ego_vehicle)
-        # self.ego_camera.listen(lambda image: rgb_callback(self.image_data, image))
-        self.ego_camera.listen(lambda image: self.rgb_callback(image))
+
+        # start callback function
+        self.ego_camera.listen(lambda image: self.depth_camera_callback(image))
 
     def spawn_ego_vehicle(self, spawn_points_number: int = SPAWN_POINT_NUMBER):
         # spawn ego vehicle
@@ -71,8 +76,12 @@ class carla_apis():
         print("done")
 
     # callback func
-    def rgb_callback(self, image):
+    def depth_camera_callback(self, image):
+        image.convert(carla.ColorConverter.LogarithmicDepth)
         self.image_data = np.reshape(np.copy(image.raw_data), (image.height, image.width, 4))
+
+    def get_image_update(self):
+        return self.image_data
 
 if __name__ == '__main__':
     carla_api = carla_apis()
@@ -84,10 +93,9 @@ if __name__ == '__main__':
     cv2.waitKey(1)
 
     while True:
-        cv2.imshow(WINDOW_NAME, carla_api.image_data)
+        cv2.imshow(WINDOW_NAME, carla_api.get_image_update())
         
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     carla_api.terminate()
-    cv2.destroyALLWindows()
