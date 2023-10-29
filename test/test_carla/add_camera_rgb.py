@@ -4,8 +4,6 @@ import numpy as np
 
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# import utils
-from utils.misc import get_open_port
 
 # params
 SPAWN_POINT_NUMBER = 70
@@ -50,7 +48,7 @@ class carla_apis():
         camera_bp.set_attribute('image_size_x', str(IMAGE_WIDTH))
         camera_bp.set_attribute('image_size_y', str(IMAGE_HEIGHT))
         camera_bp.set_attribute('fov', '110')
-        camera_transform = carla.Transform(carla.Location(x=1.5, z=20), carla.Rotation(pitch=-90))
+        camera_transform = carla.Transform(carla.Location(x=2.0, z=1.4), carla.Rotation())
 
         # attach camera to the vehicle
         self.ego_camera = self.world.spawn_actor(camera_bp, camera_transform, attach_to=self.ego_vehicle)
@@ -96,4 +94,3 @@ if __name__ == '__main__':
             break
 
     carla_api.terminate()
-    cv2.destroyALLWindows()
