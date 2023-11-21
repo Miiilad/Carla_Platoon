@@ -17,7 +17,7 @@ WINDOW_NAME = 'RGB Camera bird view'
 image_size = (IMAGE_HEIGHT, IMAGE_WIDTH, 4)
 
 class carla_apis():
-    def __init__(self, world_name: str="Town01_Opt", host='carla_server', port=2000):
+    def __init__(self, world_name: str="Town10HD_Opt", host='carla_server', port=2000):
         # connect to carla server
         self.client = carla.Client(host, port)
         self.client.set_timeout(10.0)

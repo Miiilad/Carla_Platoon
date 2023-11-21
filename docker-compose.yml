@@ -50,6 +50,13 @@ services:
     # command: "ros2 launch carla_ros_bridge carla_ros_bridge.launch.py host:='carla_server'"
     # command: "ros2 launch carla_ros_bridge carla_ros_bridge_with_example_ego_vehicle.launch.py host:='carla_server'"
     restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            device_ids: ['0']
+            capabilities: [gpu]
     build: 
       context: ./docker
       dockerfile: ./carla_ros2_bridge/Dockerfile
@@ -67,6 +74,8 @@ services:
       - carla_server
     volumes:
       - ./test:/home/docker/carla-ros-bridge/test/
+      - ./carla_scripts:/home/docker/carla_scripts/
+     # - /dev:/dev
 
   # carla_viz:
   #   image: mjxu96/carlaviz:${CARLA_VERSION}
