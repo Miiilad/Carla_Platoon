@@ -21,9 +21,21 @@ class udp_server():
                 "longitude": 0.0,
                 "altitude": 0.0
             },
+            "throttle": 0.0,
+            "brake": 0.0,
+            "steer": 0.0,
         }
 
-    def updagte_IMU(self, acc_gyro):
+    def update_throttle(self, throttle):
+        self.imu_gnss_data['throttle'] = throttle
+    
+    def update_brake(self, brake):
+        self.imu_gnss_data['brake'] = brake
+    
+    def update_steer(self, steer):
+        self.imu_gnss_data['steer'] = steer
+
+    def update_IMU(self, acc_gyro):
         acc = acc_gyro[0]
         gyro = acc_gyro[1]
         self.imu_gnss_data['IMU']['accelerometer'] = acc

@@ -3,6 +3,12 @@ import random
 import pygame
 import numpy as np
 
+import os,sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from acc_senario.utils.udp_server import udp_server
+
+udp_server = udp_server()
+
 # Connect to the client and retrieve the world object
 client = carla.Client('carla_server', 2000)
 world = client.get_world()
@@ -62,6 +68,27 @@ def pygame_callback(data, obj):
     img = img[:, :, ::-1]
     obj.surface = pygame.surfarray.make_surface(img.swapaxes(0,1))
 
+def imu_callback(data):
+    acc = data.accelerometer
+    gyro = data.gyroscope
+    acc = [acc.x, acc.y, acc.z]
+    gyro = [gyro.x, gyro.y, gyro.z]
+
+    udp_server.update_IMU([acc, gyro])
+
+def gnss_callback(data):
+    lat = data.latitude
+    lon = data.longitude
+    alt = data.altitude
+    udp_server.update_GNSS([lat, lon, alt])
+
+def control_callback(data):
+    throttle = data.throttle
+    brake = data.brake
+    steer = data.steer
+    udp_server.update_throttle(throttle)
+    udp_server.update_brake(brake)
+    udp_server.update_steer(steer)
 
 # Control object to manage vehicle controls
 class ControlObject(object):
@@ -145,6 +172,7 @@ class ControlObject(object):
                 self._steer_cache = 0.0
             self._control.steer = round(self._steer_cache,1)
 
+        control_callback(self._control)
         # Ápply the control parameters to the ego vehicle
         self._vehicle.apply_control(self._control)
 
@@ -156,8 +184,21 @@ camera_init_trans = carla.Transform(carla.Location(x=-5, z=3), carla.Rotation(pi
 camera_bp = world.get_blueprint_library().find('sensor.camera.rgb')
 camera = world.spawn_actor(camera_bp, camera_init_trans, attach_to=ego_vehicle)
 
+# initialise the imu sensor GNSS
+imu_bp = world.get_blueprint_library().find('sensor.other.imu')
+imu_transform = carla.Transform(carla.Location())
+imu = world.spawn_actor(imu_bp, imu_transform, attach_to=ego_vehicle)
+
+gns_bp = world.get_blueprint_library().find('sensor.other.gnss')
+gnss_transform = carla.Transform(carla.Location())
+gnss = world.spawn_actor(gns_bp, gnss_transform, attach_to=ego_vehicle)
+
 # Start camera with PyGame callback
 camera.listen(lambda image: pygame_callback(image, renderObject))
+
+# Start IMU GNSS callback
+imu.listen(lambda data: imu_callback(data))
+gnss.listen(lambda data: gnss_callback(data))
 
 # Get camera dimensions
 image_w = camera_bp.get_attribute("image_size_x").as_int()
@@ -186,6 +227,8 @@ while not crashed:
     pygame.display.flip()
     # Process the current control state
     controlObject.process_control()
+
+    udp_server.update()
     # Collect key press events
     for event in pygame.event.get():
         # If the window is closed, break the while loop
@@ -204,11 +247,19 @@ while not crashed:
                     # Stop and remove the camera
                     camera.stop()
                     camera.destroy()
+                    imu.stop()
+                    imu.destroy()
+                    gnss.stop()
+                    gnss.destroy()
 
                     # Spawn new camera and attach to new vehicle
                     controlObject = ControlObject(ego_vehicle)
                     camera = world.spawn_actor(camera_bp, camera_init_trans, attach_to=ego_vehicle)
                     camera.listen(lambda image: pygame_callback(image, renderObject))
+                    imu = world.spawn_actor(imu_bp, imu_transform, attach_to=ego_vehicle)
+                    imu.listen(lambda data: imu_callback(data))
+                    gnss = world.spawn_actor(gns_bp, gnss_transform, attach_to=ego_vehicle)
+                    gnss.listen(lambda data: gnss_callback(data))
 
                     # Update PyGame window
                     gameDisplay.fill((0,0,0))               
