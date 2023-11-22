@@ -32,7 +32,7 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
       - QT_X11_NO_MITSHM=1 # Fix a bug with QT
       - SDL_VIDEODRIVER=x11
-    user: ${UID}
+    user: ${FIXUID}
     volumes:
       - ${HOME}/.Xauthority:/root/.Xauthority:rw
       - /tmp/.X11-unix:/tmp/.X11-unix
