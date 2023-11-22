@@ -79,8 +79,6 @@ services:
       args:
         - CARLA_VERSION=${CARLA_VERSION:?}
     user: ${FIXUID:?}:${FIXGID:?}
-    # volumes:
-    #   - /tmp/.X11-unix:/tmp/.X11-unix:rw  # Share the X11 socket
     environment:
       - CARLA_HOSTNAME=carla_server
       # - DISPLAY=:0
