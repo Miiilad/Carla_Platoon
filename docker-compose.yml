@@ -21,8 +21,8 @@ services:
 
   carla_server:
     image: "carlasim/carla:${CARLA_VERSION}"
-    # command: ["bash", "./CarlaUE4.sh", "-vulkan", "-quality-level=${CARLA_QUALITY}", "-nosound", "-carla-server", "-fps=30"] # show the screen
-    command: ["./CarlaUE4.sh", "-RenderOffScreen", "-quality-level=${CARLA_QUALITY}", "-nosound", "-carla-server", "-fps=30"]
+    command: ["bash", "./CarlaUE4.sh", "-vulkan", "-quality-level=${CARLA_QUALITY}", "-nosound", "-carla-server", "-fps=30"] # show the screen
+    # command: ["./CarlaUE4.sh", "-RenderOffScreen", "-quality-level=${CARLA_QUALITY}", "-nosound", "-carla-server", "-fps=30"]
     runtime: nvidia
     # ports:
     #  - "2000-2002:2000-2002"

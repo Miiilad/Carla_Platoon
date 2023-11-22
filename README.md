@@ -146,3 +146,11 @@ docker run -it --network="host" mjxu96/carlaviz:0.9.13 \
   --simulator_host localhost \
   --simulator_port 2000
 ```
+
+## check the spawn points
+
+We can check the spawn points with birdview camera using the following command:
+
+```bash
+python carla_scripts/examples/spawn_point.py
+```
