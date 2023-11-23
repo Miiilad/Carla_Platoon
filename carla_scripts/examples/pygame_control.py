@@ -12,6 +12,7 @@ udp_server = udp_server()
 # Connect to the client and retrieve the world object
 client = carla.Client('carla_server', 2000)
 world = client.get_world()
+# world = client.load_world("Town10HD_Opt")
 world = client.load_world("Town10HD_Opt")
 
 # Set up the simulator in synchronous mode

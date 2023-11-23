@@ -5,12 +5,15 @@ import random
 SPAWN_POINT = "random"
 
 #the mode of control，"set_transform" OR "ackermann_control" OR "control" OR "autopilot"
-CONTROL_MODE = "autopilot"
+CONTROL_MODE = "set_transform"
+
+# to make the vehicle follow the line please look at https://carla.readthedocs.io/en/latest/core_map/
 
 def main():
     #create client，and get world
     client = carla.Client("carla_server", 2000)
     world = client.get_world()
+    world = client.load_world("Town04_Opt")
 
     #set ego car type
     ego_bp = world.get_blueprint_library().find('vehicle.tesla.model3')
@@ -30,7 +33,8 @@ def main():
             world.debug.draw_string(spawn_point.location, str(i), life_time=100)
             world.debug.draw_arrow(spawn_point.location, spawn_point.location + spawn_point.get_forward_vector(), life_time=100)
 
-        spawn_point = random.choice(spawn_points)
+        # spawn_point = random.choice(spawn_points)
+        spawn_point = spawn_points[171]
     
     #generate ego car
     ego_vehicle = world.try_spawn_actor(ego_bp, spawn_point)
@@ -66,7 +70,7 @@ def main():
         # control
         if CONTROL_MODE == "set_transform":
             new_ego_tf = carla.Transform(ego_tf.location, ego_tf.rotation)
-            new_ego_tf.location += ego_tf.get_forward_vector() * 0.1
+            new_ego_tf.location += ego_tf.get_forward_vector() * 0.2
             ego_vehicle.set_transform(new_ego_tf)
         elif CONTROL_MODE == "ackermann_control":
             #ackermann_control

@@ -6,6 +6,9 @@ def main():
     #create client，and get world
     client = carla.Client("carla_server", 2000)
     world = client.get_world()
+    # world = client.load_world("Town10HD_Opt")
+    print("available maps: ", client.get_available_maps())
+    world = client.load_world("Town04_Opt")
 
     spawn_points = world.get_map().get_spawn_points()
     
