@@ -71,6 +71,7 @@ def main():
         if CONTROL_MODE == "set_transform":
             new_ego_tf = carla.Transform(ego_tf.location, ego_tf.rotation)
             new_ego_tf.location += ego_tf.get_forward_vector() * 0.2
+            new_ego_tf.location.y = 30
             ego_vehicle.set_transform(new_ego_tf)
         elif CONTROL_MODE == "ackermann_control":
             #ackermann_control
