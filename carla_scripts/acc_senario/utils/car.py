@@ -52,14 +52,38 @@ class mCar:
         physics_control.use_sweep_wheel_collision = True
         physics_control.wheels = wheels
 
+        # attach imu sensor, gnss sensor, collision sensor to the ego car
+        imu_bp = world.get_blueprint_library().find('sensor.other.imu')
+        imu_tf = carla.Transform(carla.Location())
+        self.imu = world.spawn_actor(imu_bp, imu_tf, attach_to=self.vehicle)
+
+        gnss_bp = world.get_blueprint_library().find('sensor.other.gnss')
+        gnss_tf = carla.Transform(carla.Location())
+        self.gnss = world.spawn_actor(gnss_bp, gnss_tf, attach_to=self.vehicle)
+
+        collision_bp = world.get_blueprint_library().find('sensor.other.collision')
+        collision_tf = carla.Transform(carla.Location())
+        self.collision = world.spawn_actor(collision_bp, collision_tf, attach_to=self.vehicle)
+
+        # callback function
+        self.imu_data = None
+        self.gnss_data = None
+        self.imu.listen(lambda imu_data: self.imu_callback(imu_data))
+        self.gnss.listen(lambda gnss_data: self.gnss_callback(gnss_data))
+        self.collision.listen(lambda collision_data: self.collision_callback(collision_data))
+
+
         # Apply Vehicle Physics Control for the vehicle
         self.vehicle.apply_physics_control(physics_control)
         self.localplanner = LocalPlanner(self.vehicle)
 
         # this part is for matplot juggler
-        self.udp_server = udp_server(name=name)
+        self._udp_server = udp_server(name=name)
 
     def destroy(self):
+        self.imu.destroy()
+        self.gnss.destroy()
+        self.collision.destroy()
         self.vehicle.destroy()
     
     def get_transform_vec(self):
@@ -87,7 +111,34 @@ class mCar:
     def lp_control_run_step(self):
         self.localplanner.set_speed(self.run_speed)
         control = self.localplanner.run_step()
-        self.udp_server.update_control(control)
-        self.udp_server.update()
+        self._udp_server.update_control(control)
+
+        if self.imu_data != None and self.gnss_data != None:
+            # update imu
+            acc = self.imu_data.accelerometer
+            gyro = self.imu_data.gyroscope
+            acc = [acc.x, acc.y, acc.z]
+            gyro = [gyro.x, gyro.y, gyro.z]
+            self._udp_server.update_IMU([acc, gyro])
+
+            # update gnss
+            lat = self.gnss_data.latitude
+            lon = self.gnss_data.longitude
+            alt = self.gnss_data.altitude
+            self._udp_server.update_GNSS([lat, lon, alt])
+
+        # send message
+        self._udp_server.update()
         self.apply_control(control)
         return self.localplanner.done()
+    
+    def imu_callback(self, imu_data):
+        self.imu_data = imu_data
+
+    def gnss_callback(self, gnss_data):
+        self.gnss_data = gnss_data
+
+    def collision_callback(self, collision_data):
+        self.collision_data = collision_data
+        # self._udp_server.update_collision(collision_data)
+

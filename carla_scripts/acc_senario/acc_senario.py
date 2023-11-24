@@ -39,6 +39,7 @@ ego_car.set_global_plan(route)
 
 # run the ego car
 while True:
+    ego_car.run_speed = 50
     done = ego_car.lp_control_run_step()
     ego_car.get_focus()
     # check if local planner reach the end
