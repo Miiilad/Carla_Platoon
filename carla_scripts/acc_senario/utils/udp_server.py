@@ -92,9 +92,12 @@ class udp_server():
             self.runtime_data[self.name]['GNSS']['longitude'] = gnss[1]
             self.runtime_data[self.name]['GNSS']['altitude'] = gnss[2]
 
-    def update(self):
+    def update(self, snap = None):
         # update timestamp
-        self.runtime_data['timestamp'] = time.time()
+        if snap is None:
+            self.runtime_data['timestamp'] = time.time()
+        else:
+            self.runtime_data['timestamp'] = snap
         # send data
         self.sock.sendto(json.dumps(self.runtime_data).encode(), (self.dest_host, self.dest_port))
 

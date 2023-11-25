@@ -13,7 +13,7 @@ class mCar:
         # spawn ego car
         world = client.get_world()
         ego_bp = world.get_blueprint_library().find('vehicle.tesla.model3')
-        ego_bp.set_attribute('role_name','ego')
+        ego_bp.set_attribute('role_name',name)
 
         if spawn_point is None:
             spawn_points = world.get_map().get_spawn_points()
@@ -127,8 +127,9 @@ class mCar:
             alt = self.gnss_data.altitude
             self._udp_server.update_GNSS([lat, lon, alt])
 
+        snap = self.vehicle.get_world().wait_for_tick()
         # send message
-        self._udp_server.update()
+        self._udp_server.update(snap=snap.frame)
         self.apply_control(control)
         return self.localplanner.done()
     
