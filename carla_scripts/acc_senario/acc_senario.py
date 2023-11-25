@@ -7,9 +7,16 @@ from utils.car import mCar
 from utils.visualizer import visualize_waypoint
 
 
+def pid_controller(input):
+    kp = -10
+    return kp * input
+
 client = carla.Client('carla_server', 2000)
 world = client.get_world()
 world = client.load_world("Town04_Opt")
+
+# set the weather sunny and clear
+weather = carla.WeatherParameters(cloudiness=0.0, precipitation=0.0, sun_altitude_angle=90.0)
 
 # get the spawn point
 spawn_points = world.get_map().get_spawn_points()
@@ -58,8 +65,17 @@ visualize_waypoint(client, route1, sampling_resolution)
 ego_car.set_global_plan(route1)
 lead_car.set_global_plan(route2)
 
-# acc senario
-while True:
+# run the simulation
+init_time = world.wait_for_tick().timestamp.platform_timestamp
+run_time = 0
+
+# run time should within 100 seconds
+while run_time < 100:
+    snap_time = world.wait_for_tick().timestamp.platform_timestamp
+    run_time = snap_time - init_time
+    print(f"time:{run_time:.2f}\tcollision: ", ego_car.collision_data) # show the time in seconds
+    
+
     # run the leader car
     lead_car.run_speed = 50
     done = lead_car.lp_control_run_step()
@@ -71,12 +87,9 @@ while True:
     # print(f"distance = {distance}")
 
     # pid control
-    target_distance = 20
-    error = target_distance - distance
-
-    kp = -10
-    ego_car.run_speed = kp * error
-    print(ego_car.run_speed)
+    distance_setpoint = 20
+    error = distance_setpoint - distance
+    ego_car.run_speed = pid_controller(error)
 
     # run the ego car
     ego_car.get_focus()
@@ -84,6 +97,13 @@ while True:
 
     # check if local planner reach the end
     if done:
+        print("done")
+        break
+    
+    if ego_car.collision_data is not None:
+        # CollisionEvent(frame=5673, timestamp=21.158847, other_actor=0x447cfe0)
+        collide_time = ego_car.collision_data.timestamp
+        print(f"collision occured at time: {collide_time:.2f}")
         break
 
 # if input("press any key to continue"):
@@ -91,3 +111,4 @@ while True:
 
 # destroy the ego car
 ego_car.destroy()
+lead_car.destroy()

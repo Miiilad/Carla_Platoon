@@ -68,6 +68,7 @@ class mCar:
         # callback function
         self.imu_data = None
         self.gnss_data = None
+        self.collision_data = None
         self.imu.listen(lambda imu_data: self.imu_callback(imu_data))
         self.gnss.listen(lambda gnss_data: self.gnss_callback(gnss_data))
         self.collision.listen(lambda collision_data: self.collision_callback(collision_data))
