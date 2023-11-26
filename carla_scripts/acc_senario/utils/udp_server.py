@@ -101,4 +101,8 @@ class udp_server():
         # send data
         self.sock.sendto(json.dumps(self.runtime_data).encode(), (self.dest_host, self.dest_port))
 
-        
+def send_custom_data(data):
+    dest_host = 'localhost'
+    dest_port = 9870
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.sendto(json.dumps(data).encode(), (dest_host, dest_port))

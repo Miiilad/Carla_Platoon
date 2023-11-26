@@ -176,3 +176,11 @@ class mCar:
         # update snap
         snap = self.vehicle.get_world().wait_for_tick()
         self._udp_server.update(snap=snap.frame)
+
+    @property
+    def _velocity(self):
+        return self.vehicle.get_velocity()
+    
+    @property
+    def _acceleration(self):
+        return self.vehicle.get_acceleration()
