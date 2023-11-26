@@ -2,7 +2,7 @@ import carla
 import os, sys
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
-from agents.navigation.local_planner import LocalPlanner
+
 from utils.car import mCar
 from utils.visualizer import visualize_waypoint
 from utils.udp_server import send_custom_data
