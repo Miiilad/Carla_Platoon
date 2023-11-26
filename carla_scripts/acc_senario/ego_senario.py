@@ -42,6 +42,7 @@ ego_car.trig_autopilot()
 
 # for plotjuggler
 data_to_send = {
+                "custom data":{
                 "timestamp": 0,
                 "acceleration":{"x":0.0,
                                 "y":0.0,
@@ -50,7 +51,7 @@ data_to_send = {
                 "velocity":{"x":0.0,
                                 "y":0.0,
                                 "z":0.0,
-                                },
+                                },}
             }
 
 # run the ego car
@@ -61,14 +62,14 @@ while True:
     ego_car.get_focus()
     ego_car.update_state()
 
-    data_to_send["timestamp"] = world.wait_for_tick().frame
-    data_to_send["acceleration"]["x"] = ego_car._acceleration.x
-    data_to_send["acceleration"]["y"] = ego_car._acceleration.y
-    data_to_send["acceleration"]["z"] = ego_car._acceleration.z
+    data_to_send["custom data"]["timestamp"] = world.wait_for_tick().frame
+    data_to_send["custom data"]["acceleration"]["x"] = ego_car._acceleration.x
+    data_to_send["custom data"]["acceleration"]["y"] = ego_car._acceleration.y
+    data_to_send["custom data"]["acceleration"]["z"] = ego_car._acceleration.z
 
-    data_to_send["velocity"]["x"] = ego_car._velocity.x
-    data_to_send["velocity"]["y"] = ego_car._velocity.y
-    data_to_send["velocity"]["z"] = ego_car._velocity.z
+    data_to_send["custom data"]["velocity"]["x"] = ego_car._velocity.x
+    data_to_send["custom data"]["velocity"]["y"] = ego_car._velocity.y
+    data_to_send["custom data"]["velocity"]["z"] = ego_car._velocity.z
 
     send_custom_data(data_to_send)
     # check if local planner reach the end
