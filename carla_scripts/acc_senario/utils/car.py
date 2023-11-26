@@ -17,7 +17,8 @@ class mCar:
 
         if spawn_point is None:
             spawn_points = world.get_map().get_spawn_points()
-            self.spawn_point = spawn_points[171]
+            # self.spawn_point = spawn_points[171]
+            self.spawn_point = spawn_points[0]
         else:
             self.spawn_point = spawn_point
         
@@ -29,36 +30,39 @@ class mCar:
 
         # vehicle PHYSICS property
         self.physics = carla.VehiclePhysicsControl()
-        # Create Wheels Physics Control
-        front_left_wheel  = carla.WheelPhysicsControl(tire_friction=2.0, damping_rate=1.5, max_steer_angle=70.0, long_stiff_value=1000)
-        front_right_wheel = carla.WheelPhysicsControl(tire_friction=2.0, damping_rate=1.5, max_steer_angle=70.0, long_stiff_value=1000)
-        rear_left_wheel   = carla.WheelPhysicsControl(tire_friction=3.0, damping_rate=1.5, max_steer_angle=0.0,  long_stiff_value=1000)
-        rear_right_wheel  = carla.WheelPhysicsControl(tire_friction=3.0, damping_rate=1.5, max_steer_angle=0.0,  long_stiff_value=1000) # Reducing friction increases idle throttle 
+        # # Create Wheels Physics Control
+        # front_left_wheel  = carla.WheelPhysicsControl(tire_friction=2.0, damping_rate=1.5, max_steer_angle=70.0, long_stiff_value=1000)
+        # front_right_wheel = carla.WheelPhysicsControl(tire_friction=2.0, damping_rate=1.5, max_steer_angle=70.0, long_stiff_value=1000)
+        # rear_left_wheel   = carla.WheelPhysicsControl(tire_friction=3.0, damping_rate=1.5, max_steer_angle=0.0,  long_stiff_value=1000)
+        # rear_right_wheel  = carla.WheelPhysicsControl(tire_friction=3.0, damping_rate=1.5, max_steer_angle=0.0,  long_stiff_value=1000) # Reducing friction increases idle throttle 
 
-        wheels = [front_left_wheel, front_right_wheel, rear_left_wheel, rear_right_wheel]
+        # wheels = [front_left_wheel, front_right_wheel, rear_left_wheel, rear_right_wheel]
 
-        # Change Vehicle Physics Control parameters of the vehicle
-        physics_control = self.vehicle.get_physics_control()
-        physics_control.torque_curve = [carla.Vector2D(x=0, y=400), carla.Vector2D(x=1300, y=600)]
-        physics_control.max_rpm = 10000
-        physics_control.moi = 1.0
-        physics_control.damping_rate_full_throttle = 0.0
-        physics_control.use_gear_autobox = True
-        physics_control.gear_switch_time = 0.5
-        physics_control.clutch_strength = 10
-        physics_control.mass = 10000
-        physics_control.drag_coefficient = 0.25
-        physics_control.steering_curve = [carla.Vector2D(x=0, y=1), carla.Vector2D(x=100, y=1), carla.Vector2D(x=300, y=1)]
-        physics_control.use_sweep_wheel_collision = True
-        physics_control.wheels = wheels
-
+        # # Change Vehicle Physics Control parameters of the vehicle
+        # physics_control = self.vehicle.get_physics_control()
+        # physics_control.torque_curve = [carla.Vector2D(x=0, y=400), carla.Vector2D(x=1300, y=600)]
+        # physics_control.max_rpm = 10000
+        # physics_control.moi = 1.0
+        # physics_control.damping_rate_full_throttle = 0.0
+        # physics_control.use_gear_autobox = False
+        # physics_control.gear_switch_time = 0.5
+        # physics_control.clutch_strength = 10
+        # physics_control.mass = 10000
+        # physics_control.drag_coefficient = 0.25
+        # physics_control.steering_curve = [carla.Vector2D(x=0, y=1), carla.Vector2D(x=100, y=1), carla.Vector2D(x=300, y=1)]
+        # physics_control.use_sweep_wheel_collision = True
+        # physics_control.wheels = wheels
+        # self.vehicle.apply_physics_control(physics_control)
+        
         # attach imu sensor, gnss sensor, collision sensor to the ego car
         imu_bp = world.get_blueprint_library().find('sensor.other.imu')
-        imu_tf = carla.Transform(carla.Location())
+        # update rate is 30hz
+        imu_tf = carla.Transform(carla.Location(x=1.5, z=1.4))
         self.imu = world.spawn_actor(imu_bp, imu_tf, attach_to=self.vehicle)
 
         gnss_bp = world.get_blueprint_library().find('sensor.other.gnss')
-        gnss_tf = carla.Transform(carla.Location())
+        # update rate is 30hz
+        gnss_tf = carla.Transform(carla.Location(x=1.5, z=1.4))
         self.gnss = world.spawn_actor(gnss_bp, gnss_tf, attach_to=self.vehicle)
 
         collision_bp = world.get_blueprint_library().find('sensor.other.collision')
@@ -75,11 +79,12 @@ class mCar:
 
 
         # Apply Vehicle Physics Control for the vehicle
-        self.vehicle.apply_physics_control(physics_control)
         self.localplanner = LocalPlanner(self.vehicle)
 
         # this part is for matplot juggler
         self._udp_server = udp_server(name=name)
+
+        self.auto = False
 
     def destroy(self):
         self.imu.destroy()
@@ -144,3 +149,30 @@ class mCar:
         self.collision_data = collision_data
         # self._udp_server.update_collision(collision_data)
 
+    def trig_autopilot(self):
+        if self.auto == True:
+            self.auto = False
+            self.vehicle.set_autopilot(False)
+            print("autopilot off")
+        else:
+            self.auto = True
+            self.vehicle.set_autopilot(True)
+            print("autopilot on")
+
+    def update_state(self):
+        # update imu
+        acc = self.imu_data.accelerometer
+        gyro = self.imu_data.gyroscope
+        acc = [acc.x, acc.y, acc.z]
+        gyro = [gyro.x, gyro.y, gyro.z]
+        self._udp_server.update_IMU([acc, gyro])
+
+        # update gnss
+        lat = self.gnss_data.latitude
+        lon = self.gnss_data.longitude
+        alt = self.gnss_data.altitude
+        self._udp_server.update_GNSS([lat, lon, alt])
+
+        # update snap
+        snap = self.vehicle.get_world().wait_for_tick()
+        self._udp_server.update(snap=snap.frame)

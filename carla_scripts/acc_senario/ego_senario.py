@@ -9,6 +9,7 @@ from utils.visualizer import visualize_waypoint
 
 client = carla.Client('carla_server', 2000)
 world = client.get_world()
+# world = client.load_world("Town04_Opt")
 world = client.load_world("Town04_Opt")
 
 # spawn ego car
@@ -36,15 +37,18 @@ visualize_waypoint(client, route, sampling_resolution)
 
 # local planner for the ego car
 ego_car.set_global_plan(route)
+ego_car.trig_autopilot()
 
 # run the ego car
 while True:
     ego_car.run_speed = 50
-    done = ego_car.lp_control_run_step()
+    
+    # done = ego_car.lp_control_run_step()
     ego_car.get_focus()
+    ego_car.update_state()
     # check if local planner reach the end
-    if done:
-        break
+    # if done:
+    #     break
 
 # destroy the ego car
 ego_car.destroy()
