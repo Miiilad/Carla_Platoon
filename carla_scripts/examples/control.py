@@ -1,13 +1,33 @@
 import carla
 import random
+import sys
+sys.path.append('/home/docker/carla_scripts/acc_senario/utils')
+from udp_server import send_custom_data
 
 #the mode of spawning，"spectator" OR "random"
 SPAWN_POINT = "random"
 
 #the mode of control，"set_transform" OR "ackermann_control" OR "control" OR "autopilot"
-CONTROL_MODE = "set_transform"
+CONTROL_MODE = "control"
 
 # to make the vehicle follow the line please look at https://carla.readthedocs.io/en/latest/core_map/
+
+# for plotjuggler
+data_to_send = {
+                "custom data":{
+                "timestamp": 0,
+                "acceleration":{"x":0.0,
+                                "y":0.0,
+                                "z":0.0,
+                                },
+                "velocity":{"x":0.0,
+                                "y":0.0,
+                                "z":0.0,
+                                },
+                "throttle":0.0,
+            }
+            }
+
 
 def main():
     #create client，and get world
@@ -54,7 +74,7 @@ def main():
     ego_vehicle.set_light_state(carla.VehicleLightState.All)
 
     # async
-    while run_frame < 10000:
+    while run_frame < 10*10000:
         snap = world.wait_for_tick()
         run_frame = snap.frame - init_frame
         print(f"-- run_frame = {run_frame}")
@@ -81,8 +101,21 @@ def main():
         elif CONTROL_MODE == "control":
             #control
             control = carla.VehicleControl()
-            control.throttle = 0.3
+            control.throttle = 1.0
             ego_vehicle.apply_control(control)
+
+            data_to_send["custom data"]["timestamp"] = world.wait_for_tick().frame
+            data_to_send["custom data"]["acceleration"]["x"] = ego_vehicle.get_acceleration().x
+            data_to_send["custom data"]["acceleration"]["y"] = ego_vehicle.get_acceleration().y
+            data_to_send["custom data"]["acceleration"]["z"] = ego_vehicle.get_acceleration().z
+
+            data_to_send["custom data"]["velocity"]["x"] = ego_vehicle.get_velocity().x
+            data_to_send["custom data"]["velocity"]["y"] = ego_vehicle.get_velocity().y
+            data_to_send["custom data"]["velocity"]["z"] = ego_vehicle.get_velocity().z
+
+            data_to_send["custom data"]["throttle"] = control.throttle
+
+            send_custom_data(data_to_send)
         else:
             #set autopilot
             ego_vehicle.set_autopilot(True)

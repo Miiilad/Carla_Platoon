@@ -101,7 +101,11 @@ class mCar:
         ego_tf = self.get_transform_vec()
         spectator_tf = carla.Transform(ego_tf.location, ego_tf.rotation)
         spectator_tf.location += ego_tf.get_forward_vector() * (-10)
-        spectator_tf.location += ego_tf.get_up_vector() * 3
+        spectator_tf.location += ego_tf.get_up_vector() * 5
+
+        # change the pitch angle
+        spectator_tf.rotation.pitch = -15
+
         spectator.set_transform(spectator_tf)
     
     def apply_control(self, control):

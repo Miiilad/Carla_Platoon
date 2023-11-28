@@ -1,15 +1,17 @@
 import carla
 import os, sys
+import random
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.navigation.local_planner import LocalPlanner
 from utils.car import mCar
+from utils.attacker import attacker
+from utils.controller import pid_controller
 from utils.visualizer import visualize_waypoint
 
-
-def pid_controller(input):
-    kp = -10
-    return kp * input
+IMPLEMENT_ACTUATOR_ATTACK = True
+IMPLEMENT_SENSOR_ATTACK = False
+ATTACK_TIME = 5.0
 
 client = carla.Client('carla_server', 2000)
 world = client.get_world()
@@ -69,27 +71,48 @@ lead_car.set_global_plan(route2)
 init_time = world.wait_for_tick().timestamp.platform_timestamp
 run_time = 0
 
+# attacker
+attack_dense = 0.8
+attacker = attacker(attack_dense=attack_dense, attack_time= ATTACK_TIME)
+
+# dos attack profile
+collide_time_record = None
+distance = None
 # run time should within 100 seconds
 while run_time < 100:
     snap_time = world.wait_for_tick().timestamp.platform_timestamp
     run_time = snap_time - init_time
-    print(f"time:{run_time:.2f}\tcollision: ", ego_car.collision_data) # show the time in seconds
+    # print(f"time:{run_time:.2f}\tcollision: ", ego_car.collision_data) # show the time in seconds
     
 
     # run the leader car
-    lead_car.run_speed = 50
+    lead_car.run_speed = 40
+    # if run_time > 10:
+    #     lead_car.run_speed = 110
+    
     done = lead_car.lp_control_run_step()
 
     # calculate the distance between the ego car and the leader car
     ego_tf = ego_car.vehicle.get_transform()
     leader_tf = lead_car.vehicle.get_transform()
-    distance = ego_tf.location.distance(leader_tf.location)
-    # print(f"distance = {distance}")
+
+    # this is about to implement sensor attack in the control loop
+    sensor_value = ego_tf.location.distance(leader_tf.location)
+    distance = attacker.dos_attack(sensor_value, run_time) if IMPLEMENT_SENSOR_ATTACK else sensor_value
+
+    print(f"detected distance = {distance}")
 
     # pid control
-    distance_setpoint = 20
+    distance_setpoint = 10
     error = distance_setpoint - distance
-    ego_car.run_speed = pid_controller(error)
+
+    # actuator attack
+    control_value = pid_controller(error)
+    control_input = attacker.dos_attack(control_value, run_time) if IMPLEMENT_ACTUATOR_ATTACK else control_value
+    print(f"control input: {control_input}")
+    
+    ego_car.run_speed = control_input
+    # ego_car.run_speed = 120
 
     # run the ego car
     ego_car.get_focus()
@@ -103,7 +126,11 @@ while run_time < 100:
     if ego_car.collision_data is not None:
         # CollisionEvent(frame=5673, timestamp=21.158847, other_actor=0x447cfe0)
         collide_time = ego_car.collision_data.timestamp
-        print(f"collision occured at time: {collide_time:.2f}")
+        if collide_time_record is None:
+            collide_time_record = run_time
+        print(f"collision occured at time: {collide_time_record:.2f}")
+
+    if (collide_time_record is not None) and (run_time - collide_time_record > 5):
         break
 
 # if input("press any key to continue"):
