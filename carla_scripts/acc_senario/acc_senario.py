@@ -9,7 +9,10 @@ from utils.attacker import attacker
 from utils.controller import pid_controller
 from utils.visualizer import visualize_waypoint
 
-IMPLEMENT_ACTUATOR_ATTACK = True
+# for plot juggler
+from utils.udp_server import send_custom_data
+
+IMPLEMENT_ACTUATOR_ATTACK = False
 IMPLEMENT_SENSOR_ATTACK = False
 ATTACK_TIME = 5.0
 
@@ -75,6 +78,26 @@ run_time = 0
 attack_dense = 0.8
 attacker = attacker(attack_dense=attack_dense, attack_time= ATTACK_TIME)
 
+# for plot juggler
+data_to_send = {
+    "timestamp": 0,
+
+    "signals":{
+        "acceleration":{"x":0.0,
+                        "y":0.0,
+                        "z":0.0,
+                        },
+
+        "velocity":{"x":0.0,
+                    "y":0.0,
+                    "z":0.0,
+                    },
+
+        "control signal":0.0,
+        "distance":0.0,
+    }
+}
+
 # dos attack profile
 collide_time_record = None
 distance = None
@@ -110,6 +133,21 @@ while run_time < 100:
     control_value = pid_controller(error)
     control_input = attacker.dos_attack(control_value, run_time) if IMPLEMENT_ACTUATOR_ATTACK else control_value
     print(f"control input: {control_input}")
+
+    # for plot juggler
+    data_to_send["timestamp"] = world.wait_for_tick().frame
+    data_to_send["signals"]["acceleration"]["x"] = ego_car._acceleration.x
+    data_to_send["signals"]["acceleration"]["y"] = ego_car._acceleration.y
+    data_to_send["signals"]["acceleration"]["z"] = ego_car._acceleration.z
+
+    data_to_send["signals"]["velocity"]["x"] = ego_car._velocity.x
+    data_to_send["signals"]["velocity"]["y"] = ego_car._velocity.y
+    data_to_send["signals"]["velocity"]["z"] = ego_car._velocity.z
+
+    data_to_send["signals"]["control signal"] = control_input
+    data_to_send["signals"]["distance"] = distance-5
+
+    send_custom_data(data_to_send)
     
     ego_car.run_speed = control_input
     # ego_car.run_speed = 120
