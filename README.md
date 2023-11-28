@@ -154,3 +154,9 @@ We can check the spawn points with birdview camera using the following command:
 ```bash
 python carla_scripts/examples/spawn_point.py
 ```
+
+## ROS2 development (with ros2 bridge)
+
+```bash
+ros2 launch carla_ros_bridge carla_ros_bridge_with_example_ego_vehicle.launch.py host:=carla_server
+```
