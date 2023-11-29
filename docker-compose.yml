@@ -60,7 +60,7 @@ services:
   #           capabilities: [gpu]
 
   carla_ros_bridge:
-    image: mafumaful/carla_ros2_bridge:galactic-carlaversion-0.9.13
+    image: mafumaful/carla_ros2_bridge:galactic-carlaversion-${CARLA_VERSION:?}
     # command: "ros2 launch carla_ros_bridge carla_ros_bridge.launch.py host:='carla_server'"
     # command: "ros2 launch carla_ros_bridge carla_ros_bridge_with_example_ego_vehicle.launch.py host:='carla_server'"
     restart: always
@@ -75,7 +75,7 @@ services:
       context: ./docker
       dockerfile: ./carla_ros2_bridge/Dockerfile
       cache_from:
-        - mafumaful/carla_ros2_bridge:galactic-carlaversion-0.9.13
+        - mafumaful/carla_ros2_bridge:galactic-carlaversion-${CARLA_VERSION:?}
       args:
         - CARLA_VERSION=${CARLA_VERSION:?}
     user: ${FIXUID:?}:${FIXGID:?}
