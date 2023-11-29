@@ -71,7 +71,7 @@ RUN sudo rm /etc/ros/rosdep/sources.list.d/20-default.list || true && \
 # Fix for missing rviz and pcl_ros
 RUN pip install carla==0.9.13 scipy networkx mxnet-mkl==1.6.0 numpy==1.23.1
 RUN sudo apt-get update
-RUN sudo apt-get install -y ros-galactic-rviz2 openni2-utils libpcap-dev pcl-tools python3-opencv ros-galactic-pcl-conversions ros-galactic-cv-bridge ros-galactic-plotjuggler-ros
+RUN sudo apt-get install -y ros-galactic-rviz2 openni2-utils libpcap-dev pcl-tools python3-opencv ros-galactic-pcl-conversions ros-galactic-cv-bridge ros-galactic-plotjuggler-ros ros-galactic-rqt-graph
 WORKDIR /home/docker/carla-ros-bridge/src
 RUN git clone https://github.com/astuff/astuff_sensor_msgs.git
 WORKDIR /home/docker/carla-ros-bridge
