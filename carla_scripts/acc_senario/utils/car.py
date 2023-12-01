@@ -118,9 +118,13 @@ class mCar:
     def set_speed(self, speed):
         self.run_speed = speed
 
-    def lp_control_run_step(self):
+    def lp_control_run_step(self,throttle = None):
         self.localplanner.set_speed(self.run_speed)
         control = self.localplanner.run_step()
+
+        if throttle is not None:
+            control.throttle = throttle
+
         self._udp_server.update_control(control)
 
         if self.imu_data != None and self.gnss_data != None:
