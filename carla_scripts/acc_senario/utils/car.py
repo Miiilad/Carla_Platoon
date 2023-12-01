@@ -39,12 +39,13 @@ class mCar:
         # wheels = [front_left_wheel, front_right_wheel, rear_left_wheel, rear_right_wheel]
 
         # # Change Vehicle Physics Control parameters of the vehicle
-        # physics_control = self.vehicle.get_physics_control()
+        physics_control = self.vehicle.get_physics_control()
         # physics_control.torque_curve = [carla.Vector2D(x=0, y=400), carla.Vector2D(x=1300, y=600)]
         # physics_control.max_rpm = 10000
         # physics_control.moi = 1.0
         # physics_control.damping_rate_full_throttle = 0.0
-        # physics_control.use_gear_autobox = False
+        physics_control.use_gear_autobox = False
+        physics_control.gear = 6
         # physics_control.gear_switch_time = 0.5
         # physics_control.clutch_strength = 10
         # physics_control.mass = 10000
@@ -52,7 +53,7 @@ class mCar:
         # physics_control.steering_curve = [carla.Vector2D(x=0, y=1), carla.Vector2D(x=100, y=1), carla.Vector2D(x=300, y=1)]
         # physics_control.use_sweep_wheel_collision = True
         # physics_control.wheels = wheels
-        # self.vehicle.apply_physics_control(physics_control)
+        self.vehicle.apply_physics_control(physics_control)
         
         # attach imu sensor, gnss sensor, collision sensor to the ego car
         imu_bp = world.get_blueprint_library().find('sensor.other.imu')

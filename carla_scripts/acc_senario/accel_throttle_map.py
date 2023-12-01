@@ -1,3 +1,5 @@
+# reference: https://carla.readthedocs.io/en/0.9.6/python_api_tutorial/
+
 import carla
 import os, sys
 sys.path.append('/opt/carla/PythonAPI/carla')
@@ -59,9 +61,18 @@ data_to_send = {
                 }
             }
 
+# record the running time
+init_time = world.wait_for_tick().timestamp.platform_timestamp
+run_time = 0
+
+
 # run the ego car
 while True:
-    throttle = 0.2
+    # record the time
+    snap_time = world.wait_for_tick().timestamp.platform_timestamp
+    run_time = snap_time - init_time
+
+    throttle = 1.0
     
     done = ego_car.lp_control_run_step(throttle=throttle)
     ego_car.get_focus()
@@ -81,6 +92,7 @@ while True:
     send_custom_data(data_to_send)
     # check if local planner reach the end
     if done:
+        print(f"total running time: {run_time}")
         break
 
 # destroy the ego car
