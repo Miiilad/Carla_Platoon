@@ -69,7 +69,7 @@ throttle = 0.2
 ego_car = mCar(client, spawn_point=spawn_point)
 ego_car.set_global_plan(route)
 ego_car.get_focus() # make spectator follow the ego car
-loop_times = 0
+
 while throttle <= 1.0:
     # record the time
     snap_time = world.wait_for_tick().timestamp.platform_timestamp
