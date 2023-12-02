@@ -2,6 +2,7 @@
 
 import carla
 import os, sys
+import pandas as pd
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 
@@ -18,10 +19,6 @@ world = client.load_world("Town04_Opt")
 spawn_points = world.get_map().get_spawn_points()
 spawn_point = spawn_points[171]
 
-# spawn ego car
-ego_car = mCar(client, spawn_point=spawn_point)
-ego_car.get_focus() # make spectator follow the ego car
-
 # get the map
 town_map = world.get_map()
 roads = town_map.get_topology()
@@ -31,7 +28,7 @@ sampling_resolution = 2.0
 grp = GlobalRoutePlanner(town_map, sampling_resolution)
 
 # set the start and end point
-start_point = ego_car.spawn_point
+start_point = spawn_point
 end_point = carla.Transform(carla.Location(x=340.665466, y=37.541804, z=1.720345))
 # end_point = carla.Transform(carla.Location(x=340.665466, y=33.541804, z=1.720345))
 
@@ -42,7 +39,6 @@ route = grp.trace_route(start_point.location, end_point.location)
 visualize_waypoint(client, route, sampling_resolution)
 
 # local planner for the ego car
-ego_car.set_global_plan(route)
 # ego_car.trig_autopilot()
 
 # for plotjuggler
@@ -65,15 +61,20 @@ data_to_send = {
 init_time = world.wait_for_tick().timestamp.platform_timestamp
 run_time = 0
 
+# create a acceleration-throttle speed map
+df = pd.DataFrame(columns=["throttle", "acceleration", "speed"])
 
+throttle = 0.2
 # run the ego car
-while True:
+ego_car = mCar(client, spawn_point=spawn_point)
+ego_car.set_global_plan(route)
+ego_car.get_focus() # make spectator follow the ego car
+loop_times = 0
+while throttle <= 1.0:
     # record the time
     snap_time = world.wait_for_tick().timestamp.platform_timestamp
     run_time = snap_time - init_time
 
-    throttle = 1.0
-    
     done = ego_car.lp_control_run_step(throttle=throttle)
     ego_car.get_focus()
     ego_car.update_state()
@@ -91,9 +92,32 @@ while True:
 
     send_custom_data(data_to_send)
     # check if local planner reach the end
-    if done:
-        print(f"total running time: {run_time}")
-        break
+    # pandas concat
+    new_df = pd.DataFrame({"throttle": [throttle],
+                           "acceleration": [ego_car._acceleration.x],
+                           "speed": [ego_car._velocity.x]})
+    df = pd.concat([df, new_df], ignore_index=True)
 
-# destroy the ego car
+    if done or run_time > 20:
+        print(f"total running time: {run_time:.2f}, throttle: {throttle:.1f}")
+        init_time = world.wait_for_tick().timestamp.platform_timestamp
+        throttle += 0.2
+        # destroy the ego car
+        ego_car.destroy()
+        ego_car = mCar(client, spawn_point=spawn_point)
+        ego_car.set_global_plan(route)
+
+
 ego_car.destroy()
+
+
+# save the map
+import os, sys
+
+current_path = os.path.dirname(os.path.realpath(__file__))
+save_path = os.path.join(current_path, "../data")
+if not os.path.exists(save_path):
+    os.makedirs(save_path)
+
+# save the data
+df.to_csv(os.path.join(save_path, "accel_throttle_map.csv"), index=False)
