@@ -17,11 +17,11 @@ import plotly.graph_objs as go
 fig = plotly.tools.make_subplots(rows=2, cols=1, subplot_titles=("velocity control", "throttle"))
 # plot the speed and throttle
 # plot the velocity control
-trace = go.Scatter(x=df["time"], y=df["speed"], mode='lines+markers',
+trace = go.Scatter(x=df["time"], y=df["speed"], mode='lines',
                    name="speed")
 fig.append_trace(trace, 1, 1)
 # plot the throttle
-trace = go.Scatter(x=df["time"], y=df["throttle"], mode='lines+markers',
+trace = go.Scatter(x=df["time"], y=df["throttle"], mode='lines',
                    name="throttle")
 fig.append_trace(trace, 2, 1)
 
