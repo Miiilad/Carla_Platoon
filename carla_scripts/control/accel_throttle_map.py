@@ -6,6 +6,8 @@ import pandas as pd
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 
+current_path = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(os.path.join(current_path,"../acc_senario"))
 from utils.car import mCar
 from utils.visualizer import visualize_waypoint
 from utils.udp_server import send_custom_data
