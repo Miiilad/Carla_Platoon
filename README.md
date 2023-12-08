@@ -190,6 +190,6 @@ combined_condition = condition1 | condition2
 data = data[~combined_condition]
 ```
 
-To further use the throttle to control the acceleration, I created $2 \times10 \times 1$ linear [neural network](./carla_scripts/neural/train_accvelmap.py) to map the throttle to the acceleration. The result is shown below:
+To further use the throttle to control the acceleration, I created $2 \times10 \times 1$ linear [neural network](https://github.com/Mafumaful/Carla_ROS2/blob/main/carla_scripts/neural/model.py) to map the throttle to the acceleration. The result is shown below:
 
 ![neural network throttle speed map](./pictures/Accel%20Throttle%20Speed%20map.png)
