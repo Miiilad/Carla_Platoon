@@ -30,6 +30,12 @@ throttle = torch.tensor(df["throttle"].values)
 speed = torch.tensor(df["speed"].values)
 minput = torch.stack([throttle, speed], dim=1)
 
+# test 1 example
+# ["throttle", "speed"]
+tempinput = torch.tensor([1.0, 30])
+output = model(tempinput)
+print(f"the acceleration is: {output.detach().numpy()[0]} m/s^2")
+
 import matplotlib.pyplot as plt
 
 # Assuming 'output', 'df["throttle"]', and 'df["speed"]' are defined and valid

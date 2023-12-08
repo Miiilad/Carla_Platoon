@@ -31,11 +31,22 @@ if not os.path.exists(data_path):
     sys.exit(0)
 data = pd.read_csv(data_path)
 
+# filt the data
+# Apply the first condition
+condition1 = (data['acceleration'] < 20) & (data['speed'].abs() < 0.1)
+# Apply the second condition
+condition2 = data['speed'] > 30
+# Combine conditions with OR (|) since rows should be deleted if they meet either condition
+combined_condition = condition1 | condition2
+# Invert the combined condition and use it to filter the DataFrame
+data = data[~combined_condition]
+
+
 # self defined model
-train_size = 0.85
+train_size = 0.99
 learning_rate = 5e-4
 batch_size = 32
-epochs = 100
+epochs = 1000
 
 class CustomDataset(Dataset):
     def __init__(self, n_input, n_output):
@@ -49,7 +60,7 @@ class CustomDataset(Dataset):
         return self.input[idx], self.output[idx]
     
 def main():
-    train_x, test_x, train_y, test_y = train_test_split(data[["throttle", "speed"]].values, data[["throttle"]].values, test_size=1-train_size)
+    train_x, test_x, train_y, test_y = train_test_split(data[["throttle", "speed"]].values, data[["acceleration"]].values, test_size=1-train_size)
     train_dataset = CustomDataset(train_x, train_y)
     test_dataset = CustomDataset(test_x, test_y)
 

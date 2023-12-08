@@ -174,6 +174,22 @@ To implement the acceleration control, I tested the car with different throttle 
 
 ![throttle speed map tested in carla](./pictures/speed%20throttle%20acc%20tested%20in%20carla.png)
 
+to make the neural network keep far away from the bad data as shown in picture below, I applied the following data filter:
+
+![bad data](./pictures/Accel%20Throttle%20Speed%20map%20filtered.png)
+
+```python
+# filt the data
+# Apply the first condition
+condition1 = (data['acceleration'] < 20) & (data['speed'].abs() < 0.1)
+# Apply the second condition
+condition2 = data['speed'] > 30
+# Combine conditions with OR (|) since rows should be deleted if they meet either condition
+combined_condition = condition1 | condition2
+# Invert the combined condition and use it to filter the DataFrame
+data = data[~combined_condition]
+```
+
 To further use the throttle to control the acceleration, I created $2 \times10 \times 1$ linear [neural network](./carla_scripts/neural/train_accvelmap.py) to map the throttle to the acceleration. The result is shown below:
 
 ![neural network throttle speed map](./pictures/Accel%20Throttle%20Speed%20map.png)
