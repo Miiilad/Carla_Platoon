@@ -166,3 +166,14 @@ You can also use rviz2 to visualize the data:
 ```bash
 rviz2
 ```
+
+## Acceleraion control
+
+
+To implement the acceleration control, I tested the car with different throttle in different speed. The result is shown below:
+
+![throttle speed map tested in carla](./pictures/speed%20throttle%20acc%20tested%20in%20carla.png)
+
+To further use the throttle to control the acceleration, I created 2*10*1 linear [neural network](./carla_scripts/neural/train_accvelmap.py) to map the throttle to the acceleration. The result is shown below:
+
+![neural network throttle speed map](./pictures/Accel%20Throttle%20Speed%20map.png)
