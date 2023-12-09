@@ -9,6 +9,9 @@ from torch.utils.data import Dataset, DataLoader
 
 from model import Net
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print(f"device: {device}")
+
 # load the model
 model = Net(2, 10, 1)
 model.load_state_dict(torch.load(model_path))
