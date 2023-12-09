@@ -60,7 +60,7 @@ class CustomDataset(Dataset):
         return self.input[idx], self.output[idx]
     
 def main():
-    train_x, test_x, train_y, test_y = train_test_split(data[["throttle", "speed"]].values, data[["acceleration"]].values, test_size=1-train_size)
+    train_x, test_x, train_y, test_y = train_test_split(data[["acceleration", "speed"]].values, data[["throttle"]].values, test_size=1-train_size)
     train_dataset = CustomDataset(train_x, train_y)
     test_dataset = CustomDataset(test_x, test_y)
 

@@ -2,7 +2,8 @@
 
 import carla
 import os, sys
-import pandas as pd
+import math
+
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 
@@ -11,6 +12,22 @@ sys.path.append(os.path.join(current_path,"../acc_senario"))
 from utils.car import mCar
 from utils.visualizer import visualize_waypoint
 from utils.udp_server import send_custom_data
+
+# neural network
+network_path = os.path.join(current_path,"../neural")
+sys.path.append(network_path)
+from model import  Net
+import torch
+
+model_path = os.path.join(network_path, "accel_throttle_map.pt")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print(f"device: {device}")
+
+# load the model
+model = Net(2, 10, 1).to(device)
+model.load_state_dict(torch.load(model_path))
+model.eval()
+
 
 client = carla.Client('carla_server', 2000)
 world = client.get_world()
@@ -50,6 +67,7 @@ data_to_send = {
                                 "y":0.0,
                                 "z":0.0,
                                 },
+                "target_acc": 0.0,
                 "velocity":{"x":0.0,
                                 "y":0.0,
                                 "z":0.0,
@@ -62,19 +80,28 @@ data_to_send = {
 init_time = world.wait_for_tick().timestamp.platform_timestamp
 run_time = 0
 
-# create a acceleration-throttle speed map
-df = pd.DataFrame(columns=["throttle", "acceleration", "speed"])
-
-throttle = 0.2
 # run the ego car
 ego_car = mCar(client, spawn_point=spawn_point)
 ego_car.set_global_plan(route)
 ego_car.get_focus() # make spectator follow the ego car
 
-while throttle <= 1.0:
+throttle = 0
+while True:
     # record the time
     snap_time = world.wait_for_tick().timestamp.platform_timestamp
     run_time = snap_time - init_time
+
+    target_acc = 20 if run_time < 5 else math.sin(run_time - 5)
+    # get the current state
+    vel = ego_car._velocity.x
+    vel = 3.0 if vel < 3.0 else vel
+
+    # get the throttle
+    print(f"target_acc: {target_acc}, vel: {vel}")
+    input = torch.tensor([target_acc, vel], dtype=torch.float32).to(device)
+    throttle = model(input).item() if throttle > 0 else 0
+    print(f"throttle: {throttle}")
+
 
     done = ego_car.lp_control_run_step(throttle=throttle)
     ego_car.get_focus()
@@ -89,36 +116,15 @@ while throttle <= 1.0:
     data_to_send["custom data"]["velocity"]["y"] = ego_car._velocity.y
     data_to_send["custom data"]["velocity"]["z"] = ego_car._velocity.z
 
+    data_to_send["custom data"]["target_acc"] = target_acc
+
     data_to_send["custom data"]["throttle"] = throttle
 
     send_custom_data(data_to_send)
     # check if local planner reach the end
-    # pandas concat
-    new_df = pd.DataFrame({"throttle": [throttle],
-                           "acceleration": [ego_car._acceleration.x],
-                           "speed": [ego_car._velocity.x]})
-    df = pd.concat([df, new_df], ignore_index=True)
-
-    if done or run_time > 20:
-        print(f"total running time: {run_time:.2f}, throttle: {throttle:.1f}")
+    if run_time > 15:
         init_time = world.wait_for_tick().timestamp.platform_timestamp
-        throttle += 0.2
-        # destroy the ego car
-        ego_car.destroy()
-        ego_car = mCar(client, spawn_point=spawn_point)
-        ego_car.set_global_plan(route)
+        break
 
 
 ego_car.destroy()
-
-
-# save the map
-import os, sys
-
-current_path = os.path.dirname(os.path.realpath(__file__))
-save_path = os.path.join(current_path, "../data")
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
-
-# save the data
-df.to_csv(os.path.join(save_path, "accel_throttle_map.csv"), index=False)
