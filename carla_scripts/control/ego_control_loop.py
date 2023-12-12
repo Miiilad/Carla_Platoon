@@ -57,7 +57,7 @@ data_to_send = {
                                 "y":0.0,
                                 "z":0.0,
                                 },
-                "target_acc": 0.0,
+                "target_vel": 0.0,
                 "velocity":{"x":0.0,
                                 "y":0.0,
                                 "z":0.0,
@@ -90,7 +90,7 @@ def loop_5ms_loop(loop_name="5ms loop"):
     data_to_send["custom data"]["velocity"]["y"] = ego_car._velocity.y
     data_to_send["custom data"]["velocity"]["z"] = ego_car._velocity.z
 
-    data_to_send["custom data"]["target_acc"] = target_vel
+    data_to_send["custom data"]["target_vel"] = target_vel
 
 
     send_custom_data(data_to_send)
