@@ -43,13 +43,19 @@ class FeedForward_pid_Controller:
         # integral
         self.integral += input
         self.integral = saturate(self.integral, -5, 5)
+        # pid
         value = self.kp * input + self.kd * derivative + self.ki * self.integral
         self.prev_input = input
         return value
 
     def control(self, input):
+        # pid
         pid_gain = self.pid_ctrl(input)
+        # feedforward
         feed_fowward_gain = self.feedforward_ctrl()
+        # sum
         value = pid_gain + feed_fowward_gain
+        # low pass filter
         value = self.smooth_fcn(value)
+        # saturate: the value of the throttle should be in [0, 1]
         return saturate(value)
