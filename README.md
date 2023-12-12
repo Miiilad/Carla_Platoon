@@ -193,3 +193,19 @@ data = data[~combined_condition]
 To further use the throttle to control the acceleration, I created $2 \times10 \times 1$ linear [neural network](https://github.com/Mafumaful/Carla_ROS2/blob/main/carla_scripts/neural/model.py) to map the throttle to the acceleration. The result is shown below:
 
 ![neural network throttle speed map](./pictures/Accel%20Throttle%20Speed%20map.png)
+
+
+## velocity control of the ego vehicle
+
+In this file [carla_scripts/control/ego_control_loop.py](https://github.com/Mafumaful/Carla_ROS2/blob/main/carla_scripts/control/ego_control_loop.py), I implemented the velocity control of the ego vehicle. The [controller](https://github.com/Mafumaful/Carla_ROS2/blob/main/carla_scripts/acc_senario/utils/controller.py) is a pid controller with feedforward control.
+
+The control loop is shown below:
+
++ loop_5ms_loop: the loop is used to update the state of ego vehicle with 5ms frequency
++ loop_10ms_loop: the loop is used to update the pid controller with 10ms frequency (inner loop)
++ loop_100ms_loop: the loop is used to update the throttle with 100ms frequency (outer loop)
+
+![ego control loop](./pictures/velocity%20pid%20feedforward%20control.png)
+
+As we can see in the picture the velocity of the vehicle can always track the reference velocity.
+
