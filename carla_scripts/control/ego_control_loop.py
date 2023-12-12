@@ -13,6 +13,7 @@ sys.path.append(os.path.join(current_path,"../acc_senario"))
 from utils.car import mCar
 from utils.visualizer import visualize_waypoint
 from utils.udp_server import send_custom_data
+from utils.controller import FeedForward_pid_Controller
 
 # neural network
 network_path = os.path.join(current_path,"../neural")
@@ -74,24 +75,9 @@ ego_car = mCar(client, spawn_point=spawn_point)
 ego_car.set_global_plan(route)
 ego_car.get_focus() # make spectator follow the ego car
 
-throttle = 0
-while True:
-    # record the time
-    snap_time = world.wait_for_tick().timestamp.platform_timestamp
-    run_time = snap_time - init_time
 
-    target_acc = 20 if run_time < 5 else math.sin(run_time - 5)
-    # get the current state
-    vel = ego_car._velocity.x
-    vel = 3.0 if vel < 3.0 else vel
-
-    # get the throttle
-    print(f"target_acc: {target_acc}, vel: {vel}")
-
-    print(f"throttle: {throttle}")
-
-
-    done = ego_car.lp_control_run_step(throttle=throttle)
+def loop_5ms_loop(loop_name="5ms loop"):
+    # >>>>> send data to plotjuggler >>>>>>>>
     ego_car.get_focus()
     ego_car.update_state()
 
@@ -104,14 +90,67 @@ while True:
     data_to_send["custom data"]["velocity"]["y"] = ego_car._velocity.y
     data_to_send["custom data"]["velocity"]["z"] = ego_car._velocity.z
 
-    data_to_send["custom data"]["target_acc"] = target_acc
+    data_to_send["custom data"]["target_acc"] = target_vel
 
-    data_to_send["custom data"]["throttle"] = throttle
 
     send_custom_data(data_to_send)
+    # <<<<<< send data to plotjuggler <<<<<<<<<
+
+
+def loop_10ms_loop(loop_name="10ms loop", target_vel=10):
+    vel_error = target_vel - ego_car._velocity.x
+    throttle = controller.control(vel_error)
+    done = ego_car.lp_control_run_step(throttle=throttle)
+    data_to_send["custom data"]["throttle"] = throttle
+
+    return done
+
+
+def loop_20ms_loop(loop_name="20ms loop"):
+    # this loop is for MPC
+    target_vel = 10 + math.sin(run_time)
+    return target_vel
+    
+
+
+# variables for the loop
+record_5ms = 0
+record_10ms = 0
+record_20ms = 0
+
+# variables
+throttle = 0
+target_acc = 0
+target_vel = 10
+
+# controller
+controller = FeedForward_pid_Controller()
+
+while True:
+    # record the time
+    snap_time = world.wait_for_tick().timestamp.platform_timestamp
+    run_time = snap_time - init_time
+
+
+    # run the loop
+    if run_time - record_5ms > 0.005:
+        loop_5ms_loop()
+        record_5ms = run_time
+    
+    if run_time - record_10ms > 0.01:
+        # inner loop for speed control
+        done = loop_10ms_loop(target_vel=target_vel)
+        record_10ms = run_time
+    
+    if run_time - record_20ms > 0.02:
+        # outer loop for MPC
+        target_vel = loop_20ms_loop()
+        record_20ms = run_time
+    
     # check if local planner reach the end
-    if run_time > 15:
-        init_time = world.wait_for_tick().timestamp.platform_timestamp
+    print(f"run time: {run_time}")
+    if run_time > 100 or done:
+        # end the thread
         break
 
 
