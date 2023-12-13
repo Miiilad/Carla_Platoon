@@ -16,8 +16,8 @@ class FeedForward_pid_Controller:
 
         # for pid
         self.kp = 5
-        self.kd = 10
-        self.ki = 0.1
+        self.kd = 25
+        self.ki = 0.15
         self.integral = 0
 
         self.prev_input = 0
@@ -56,6 +56,6 @@ class FeedForward_pid_Controller:
         # sum
         value = pid_gain + feed_fowward_gain
         # low pass filter
-        value = self.smooth_fcn(value)
+        #value = self.smooth_fcn(value)
         # saturate: the value of the throttle should be in [0, 1]
         return saturate(value)
