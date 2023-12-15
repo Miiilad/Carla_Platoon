@@ -58,12 +58,12 @@ class mCar:
         # attach imu sensor, gnss sensor, collision sensor to the ego car
         imu_bp = world.get_blueprint_library().find('sensor.other.imu')
         # update rate is 30hz
-        imu_tf = carla.Transform(carla.Location(x=1.5, z=1.4))
+        imu_tf = carla.Transform()
         self.imu = world.spawn_actor(imu_bp, imu_tf, attach_to=self.vehicle)
 
         gnss_bp = world.get_blueprint_library().find('sensor.other.gnss')
         # update rate is 30hz
-        gnss_tf = carla.Transform(carla.Location(x=1.5, z=1.4))
+        gnss_tf = carla.Transform()
         self.gnss = world.spawn_actor(gnss_bp, gnss_tf, attach_to=self.vehicle)
 
         collision_bp = world.get_blueprint_library().find('sensor.other.collision')
