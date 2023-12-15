@@ -112,9 +112,6 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
 
     send_custom_data(data_to_send)
     # <<<<<< send data to plotjuggler <<<<<<<<<
-    ego_car.get_focus()
-
-
 
 def loop_10ms_loop(loop_name="10ms loop", target_vel=10, run_time=None):
     vel_error = target_vel - ego_car._velocity.x
@@ -150,6 +147,7 @@ while True:
     # get focus
     run_time = run_time + fixed_delta_seconds
     world.tick()
+    ego_car.get_focus()
 
     # run the loop
     if run_time - record_5ms > 0.005:
