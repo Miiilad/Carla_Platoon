@@ -24,6 +24,11 @@ world = client.get_world()
 # world = client.load_world("Town04_Opt")
 world = client.load_world("Town04_Opt")
 
+# set for the fixed simulation step ref: https://carla.readthedocs.io/en/latest/adv_synchrony_timestep/#fixed-time-step
+# settings = world.get_settings()
+# settings.fixed_delta_seconds = 0.01
+# world.apply_settings(settings)
+
 spawn_points = world.get_map().get_spawn_points()
 spawn_point = spawn_points[171]
 
