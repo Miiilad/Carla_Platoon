@@ -1,5 +1,6 @@
 import carla
 import os, sys
+import threading
 file_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(file_path+'/../')
 from utils.udp_server import udp_server
@@ -85,6 +86,9 @@ class mCar:
         # this part is for matplot juggler
         self._udp_server = udp_server(name=name)
 
+        # thread lock for future use
+        self.lock = threading.Lock()
+
         self.auto = False
 
     def destroy(self):
@@ -149,10 +153,14 @@ class mCar:
         return self.localplanner.done()
     
     def imu_callback(self, imu_data):
+        self.lock.acquire()
         self.imu_data = imu_data
+        self.lock.release()
 
     def gnss_callback(self, gnss_data):
+        self.lock.acquire()
         self.gnss_data = gnss_data
+        self.lock.release()
 
     def collision_callback(self, collision_data):
         self.collision_data = collision_data

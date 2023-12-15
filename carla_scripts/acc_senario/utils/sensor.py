@@ -1,1 +1,0 @@
-# For different sensors

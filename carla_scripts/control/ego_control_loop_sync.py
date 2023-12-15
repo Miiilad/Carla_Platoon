@@ -4,6 +4,7 @@
 import carla
 import os, sys
 import math
+import time
 
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
@@ -144,12 +145,19 @@ controller = FeedForward_pid_Controller()
 done = False
 
 while True:
-    # get focus
+    # >>>>>>>>>>> record program execution time >>>>>>>>>>>>
+    record_start_time = time.time()
+    # <<<<<<<<<<<< record program execution time <<<<<<<<<<<<
+
+
+    # >>>>>>>>>>>>>>>>>>> get focus >>>>>>>>>>>>>>>>>>>
     run_time = run_time + fixed_delta_seconds
     world.tick()
     ego_car.get_focus()
+    # <<<<<<<<<<<<<<<<<<< get focus <<<<<<<<<<<<<<<<<<<
 
-    # run the loop
+
+    # >>>>>>>>>>>>>>>>>> run the loop >>>>>>>>>>>>>>>>>>
     if run_time - record_5ms > 0.005:
         loop_5ms_loop(run_time=run_time)
         record_5ms = run_time
@@ -166,6 +174,17 @@ while True:
     
     # check if local planner reach the end
     print(f"run time: {run_time}")
+    # <<<<<<<<<<<<<<<<<<<<<< run the loop <<<<<<<<<<<<<<<<<<<<<<
+
+
+    # >>>> if running just for visualization >>>>>>>>>>>
+    # make it more real to the real time
+    duration = time.time() - record_start_time
+    if duration < fixed_delta_seconds:
+        time.sleep(fixed_delta_seconds - duration)
+    # <<<<< if running just for visualization <<<<<<<<<<
+
+
     if run_time > 100 or done:
         # end the thread
         break
