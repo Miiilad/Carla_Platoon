@@ -75,6 +75,10 @@ class mCar:
         self.imu_data = None
         self.gnss_data = None
         self.collision_data = None
+
+        # thread lock for future use
+        self.lock = threading.Lock()
+
         self.imu.listen(lambda imu_data: self.imu_callback(imu_data))
         self.gnss.listen(lambda gnss_data: self.gnss_callback(gnss_data))
         self.collision.listen(lambda collision_data: self.collision_callback(collision_data))
@@ -85,9 +89,6 @@ class mCar:
 
         # this part is for matplot juggler
         self._udp_server = udp_server(name=name)
-
-        # thread lock for future use
-        self.lock = threading.Lock()
 
         self.auto = False
 
