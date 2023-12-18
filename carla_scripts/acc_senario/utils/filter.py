@@ -36,9 +36,11 @@ class KalmanFilter:
     def state(self):
         return self.x
 
+# the input of this filter is position
 class AccSpeedPosKF(KalmanFilter):
     def __init__(self, time_interval_approx, x0, P0, Q0, R0):
-        F = np.array([[1, time_interval_approx, 0.5 * time_interval_approx**2], [0, 1, time_interval_approx], [0, 0, 1]])
+        dt = time_interval_approx
+        F = np.array([[1, dt, 0.5 * dt**2], [0, 1, dt], [0, 0, 0]])
         B = np.array([[0], [0], [1]])
         H = np.array([[1, 0, 0]])
         super().__init__(F, B, H, x0, P0, Q0, R0)
@@ -75,7 +77,7 @@ def test_kalman_filter():
 
     x0 = np.array([[0], [0], [0]])
     P0 = np.eye(3)
-    Q0 = np.eye(3) * 0.01
+    Q0 = np.eye(3) * 0.1
     R0 = np.eye(1) * measurement_noise
 
     kf = AccSpeedPosKF(time_interval_approx, x0, P0, Q0, R0)
@@ -97,6 +99,7 @@ def test_kalman_filter():
         pos+= vel * dt
 
         pos_noise = pos + np.random.normal(0, measurement_noise)
+        kf.time_update(np.array([[acc]]))
         kf.measurement_update(pos_noise)
 
         pos_record.append(kf.position)
