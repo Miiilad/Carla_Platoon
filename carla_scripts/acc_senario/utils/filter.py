@@ -1,61 +1,126 @@
-# For different filer
-from scipy.signal import butter, lfilter, freqz
+# Revised Kalman Filter Implementation
 
-# low pass filter
 import numpy as np
-from scipy.signal import butter, lfilter, freqz
 import matplotlib.pyplot as plt
 
+class KalmanFilter:
+    def __init__(self, F, B, H, x0, P0, Q0, R0):
+        self.F = F
+        self.B = B
+        self.H = H
+        self.x = x0
+        self.P = P0
+        self.Q = Q0
+        self.R = R0
 
-def butter_lowpass(cutoff, fs, order=5):
-    return butter(order, cutoff, fs=fs, btype='low', analog=False)
+    def time_update(self, control=None, F=None, B=None):
+        if F is not None:
+            self.F = F
+        if B is not None:
+            self.B = B
 
-def butter_lowpass_filter(data, cutoff, fs, order=5):
-    b, a = butter_lowpass(cutoff, fs, order=order)
-    y = lfilter(b, a, data)
-    return y
+        if control is not None:
+            self.x = self.F @ self.x + self.B @ control
+        else:
+            self.x = self.F @ self.x
 
-def main():
-    # Filter requirements.
-    order = 6
-    fs = 30.0       # sample rate, Hz
-    cutoff = 3.667  # desired cutoff frequency of the filter, Hz
+        self.P = self.F @ self.P @ self.F.T + self.Q
 
-    # Get the filter coefficients so we can check its frequency response.
-    b, a = butter_lowpass(cutoff, fs, order)
+    def measurement_update(self, measurement):
+        y = measurement - self.H @ self.x
+        S = self.H @ self.P @ self.H.T + self.R
+        K = self.P @ self.H.T @ np.linalg.inv(S)
+        self.x = self.x + K @ y
 
-    # Plot the frequency response.
-    w, h = freqz(b, a, fs=fs, worN=8000)
+    @property
+    def state(self):
+        return self.x
+
+class AccSpeedPosKF(KalmanFilter):
+    def __init__(self, time_interval_approx, x0, P0, Q0, R0):
+        F = np.array([[1, time_interval_approx, 0.5 * time_interval_approx**2], [0, 1, time_interval_approx], [0, 0, 1]])
+        B = np.array([[0], [0], [1]])
+        H = np.array([[1, 0, 0]])
+        super().__init__(F, B, H, x0, P0, Q0, R0)
+
+    def time_update(self, control=None, time_interval_approx=None):
+        if time_interval_approx is not None:
+            self.F = np.array([[1, time_interval_approx, 0.5 * time_interval_approx**2], [0, 1, time_interval_approx], [0, 0, 1]])
+        super().time_update(control, self.F, self.B)
+
+    def measurement_update(self, measurement):
+        super().measurement_update(measurement)
+
+    @property
+    def velocity(self):
+        return self.x[1][0]
+    
+    @property
+    def position(self):
+        return self.x[0][0]
+    
+    @property
+    def acceleration(self):
+        return self.x[2][0]
+
+def test_kalman_filter():
+    time_interval_approx = 0.01
+    times = np.arange(0, 10, time_interval_approx)
+    
+    measurement_noise = 10
+
+    pos = 0.0
+    vel = 0.0
+    acc = 0.0
+
+    x0 = np.array([[0], [0], [0]])
+    P0 = np.eye(3)
+    Q0 = np.eye(3) * 0.01
+    R0 = np.eye(1) * measurement_noise
+
+    kf = AccSpeedPosKF(time_interval_approx, x0, P0, Q0, R0)
+    
+    pos_record = []
+    pos_noise_record = []
+    ground_truth_record = []
+    vel_record = []
+    
+    prev_time = 0.0
+    # velocity_profile = 20 * np.sin(0.2 * np.pi * times)
+    acc = 9.8
+
+    for i, time in enumerate(times): 
+        dt = time - prev_time
+        prev_time = time
+        
+        vel+= acc * dt
+        pos+= vel * dt
+
+        pos_noise = pos + np.random.normal(0, measurement_noise)
+        kf.measurement_update(pos_noise)
+
+        pos_record.append(kf.position)
+        pos_noise_record.append(pos_noise)
+        ground_truth_record.append(pos)
+        vel_record.append(kf.velocity)
+
     plt.subplot(2, 1, 1)
-    plt.plot(w, np.abs(h), 'b')
-    plt.plot(cutoff, 0.5*np.sqrt(2), 'ko')
-    plt.axvline(cutoff, color='k')
-    plt.xlim(0, 0.5*fs)
-    plt.title("Lowpass Filter Frequency Response")
-    plt.xlabel('Frequency [Hz]')
-    plt.grid()
-
-
-    # Demonstrate the use of the filter.
-    # First make some data to be filtered.
-    T = 5.0         # seconds
-    n = int(T * fs) # total number of samples
-    t = np.linspace(0, T, n, endpoint=False)
-    # "Noisy" data.  We want to recover the 1.2 Hz signal from this.
-    data = np.sin(1.2*2*np.pi*t) + 1.5*np.cos(9*2*np.pi*t) + 0.5*np.sin(12.0*2*np.pi*t)
-
-    # Filter the data, and plot both the original and filtered signals.
-    y = butter_lowpass_filter(data, cutoff, fs, order)
+    plt.plot(times, pos_record, label='Kalman Filter')
+    plt.scatter(times, pos_noise_record, label='Measurement', c='r', s=1)
+    plt.plot(times, ground_truth_record, label='Ground Truth')
+    plt.legend()
+    plt.ylabel('Position')
+    plt.xlabel('Time')
+    plt.grid(True)
 
     plt.subplot(2, 1, 2)
-    plt.plot(t, data, 'b-', label='data')
-    plt.plot(t, y, 'g-', linewidth=2, label='filtered data')
-    plt.xlabel('Time [sec]')
-    plt.grid()
+    plt.plot(times, vel_record, label='Kalman Filter')
     plt.legend()
+    plt.ylabel('Velocity')
+    plt.xlabel('Time')
+    plt.grid(True)
 
-    plt.subplots_adjust(hspace=0.35)
     plt.show()
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    test_kalman_filter()
