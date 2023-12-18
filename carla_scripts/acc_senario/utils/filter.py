@@ -1,7 +1,6 @@
 # Revised Kalman Filter Implementation
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 class KalmanFilter:
     def __init__(self, F, B, H, x0, P0, Q0, R0):
@@ -67,6 +66,9 @@ class AccSpeedPosKF(KalmanFilter):
     def acceleration(self):
         return self.x[2][0]
 
+
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>> TEST <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 def test_kalman_filter():
     time_interval_approx = 0.01
     times = np.arange(0.0, 10.0, time_interval_approx)
@@ -109,23 +111,39 @@ def test_kalman_filter():
         ground_truth_record.append(pos)
         vel_record.append(kf.velocity)
 
-    plt.subplot(2, 1, 1)
-    plt.plot(times, pos_record, label='Kalman Filter')
-    plt.scatter(times, pos_noise_record, label='Measurement', c='r', s=1)
-    plt.plot(times, ground_truth_record, label='Ground Truth')
-    plt.legend()
-    plt.ylabel('Position')
-    plt.xlabel('Time')
-    plt.grid(True)
 
-    plt.subplot(2, 1, 2)
-    plt.plot(times, vel_record, label='Kalman Filter')
-    plt.legend()
-    plt.ylabel('Velocity')
-    plt.xlabel('Time')
-    plt.grid(True)
+    USE_PLOTLY = True
 
-    plt.show()
+    if not USE_PLOTLY:
+        import matplotlib.pyplot as plt
+        plt.subplot(2, 1, 1)
+        plt.plot(times, pos_record, label='Kalman Filter')
+        plt.scatter(times, pos_noise_record, label='Measurement', c='r', s=1)
+        plt.plot(times, ground_truth_record, label='Ground Truth')
+        plt.legend()
+        plt.ylabel('Position')
+        plt.xlabel('Time')
+        plt.grid(True)
+
+        plt.subplot(2, 1, 2)
+        plt.plot(times, vel_record, label='Kalman Filter')
+        plt.legend()
+        plt.ylabel('Velocity')
+        plt.xlabel('Time')
+        plt.grid(True)
+
+        plt.show()
+        
+    # subplots
+    if USE_PLOTLY:
+        import plotly.graph_objects as go
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=times, y=pos_record, mode='lines', name='Kalman Filter'))
+        fig.add_trace(go.Scatter(x=times, y=pos_noise_record, mode='markers', name='Measurement', marker=dict(size=1, color='red')))
+        fig.add_trace(go.Scatter(x=times, y=ground_truth_record, mode='lines', name='Ground Truth'))
+        fig.update_layout(title='Position', xaxis_title='Time', yaxis_title='Position')
+        fig.show()
+
 
 if __name__ == '__main__':
     test_kalman_filter()
