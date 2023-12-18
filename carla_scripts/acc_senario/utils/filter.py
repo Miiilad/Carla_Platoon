@@ -10,6 +10,7 @@ class KalmanFilter:
         self.H = H
         self.x = x0
         self.P = P0
+        self.P_p = P0
         self.Q = Q0
         self.R = R0
 
@@ -24,12 +25,13 @@ class KalmanFilter:
         else:
             self.x = self.F @ self.x
 
-        self.P = self.F @ self.P @ self.F.T + self.Q
+        self.P_p = self.F @ self.P @ self.F.T + self.Q
 
     def measurement_update(self, measurement):
         y = measurement - self.H @ self.x
         S = self.H @ self.P @ self.H.T + self.R
-        K = self.P @ self.H.T @ np.linalg.inv(S)
+        K = self.P_p @ self.H.T @ np.linalg.inv(S)
+        self.P = (np.eye(self.P.shape[0]) - K @ self.H) @ self.P_p
         self.x = self.x + K @ y
 
     @property
@@ -67,16 +69,16 @@ class AccSpeedPosKF(KalmanFilter):
 
 def test_kalman_filter():
     time_interval_approx = 0.01
-    times = np.arange(0, 10, time_interval_approx)
+    times = np.arange(0.0, 10.0, time_interval_approx)
     
-    measurement_noise = 10
+    measurement_noise = 10.0
 
     pos = 0.0
     vel = 0.0
     acc = 0.0
 
     x0 = np.array([[0], [0], [0]])
-    P0 = np.eye(3)
+    P0 = np.eye(3) 
     Q0 = np.eye(3) * 0.1
     R0 = np.eye(1) * measurement_noise
 
