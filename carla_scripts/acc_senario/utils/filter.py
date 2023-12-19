@@ -65,7 +65,7 @@ class AccSpeedPosKF(KalmanFilter):
     @property
     def acceleration(self):
         return self.state[2][0]
-    
+
 
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>> TEST <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
