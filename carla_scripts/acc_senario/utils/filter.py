@@ -103,7 +103,8 @@ def test_kalman_filter():
         pos+= vel * dt
 
         pos_noise = pos + np.random.normal(0, measurement_noise)
-        kf.time_update(np.array([[acc]]))
+        # kf.time_update(np.array([[acc]]))
+        kf.time_update()
         kf.measurement_update(pos_noise)
 
         pos_record.append(kf.position)
@@ -112,7 +113,7 @@ def test_kalman_filter():
         vel_record.append(kf.velocity)
 
 
-    USE_PLOTLY = True
+    USE_PLOTLY = False
 
     if not USE_PLOTLY:
         import matplotlib.pyplot as plt
