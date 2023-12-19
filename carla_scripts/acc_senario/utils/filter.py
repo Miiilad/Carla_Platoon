@@ -56,16 +56,16 @@ class AccSpeedPosKF(KalmanFilter):
 
     @property
     def velocity(self):
-        return self.x[1][0]
+        return self.state[1][0]
     
     @property
     def position(self):
-        return self.x[0][0]
+        return self.state[0][0]
     
     @property
     def acceleration(self):
-        return self.x[2][0]
-
+        return self.state[2][0]
+    
 
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>> TEST <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
