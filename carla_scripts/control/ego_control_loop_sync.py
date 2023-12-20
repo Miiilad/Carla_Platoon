@@ -33,7 +33,7 @@ world = client.load_world("Town04_Opt")
 settings = world.get_settings()
 # sychronous mode
 settings.synchronous_mode = True
-fixed_delta_seconds = 1/200 # 200Hz
+fixed_delta_seconds = 1/120 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 # physics 
@@ -173,7 +173,8 @@ while True:
         record_20ms = run_time
     
     # check if local planner reach the end
-    print(f"run time: {run_time}")
+    # print(f"run time: {run_time}")
+    print(f"ego car location: {ego_car._location}")
     # <<<<<<<<<<<<<<<<<<<<<< run the loop <<<<<<<<<<<<<<<<<<<<<<
 
 

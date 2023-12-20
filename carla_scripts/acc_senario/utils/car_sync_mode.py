@@ -195,3 +195,7 @@ class mCar:
     @property
     def _acceleration(self):
         return self.vehicle.get_acceleration()
+
+    @property
+    def _location(self):
+        return self.vehicle.get_location()

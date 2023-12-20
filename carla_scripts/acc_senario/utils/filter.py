@@ -66,7 +66,22 @@ class AccSpeedPosKF(KalmanFilter):
     def acceleration(self):
         return self.state[2][0]
 
-
+# class DoF6KF(KalmanFilter):
+#     def __init__(self, time_interval_approx, x0, P0, Q0, R0):
+#         dt = time_interval_approx
+#         F = np.array([[1, 0, 0, dt, 0, 0, 0.5*dt**2, 0, 0, 0, 0, 0],  #state transition function
+#                       [0, 1, 0, 0, dt, 0, 0, 0.5*dt**2, 0, 0, 0, 0],
+#                       [0, 0, 1, 0, 0, dt, 0, 0, 0.5*dt**2, 0, 0, 0],
+#                       [0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 0, 0],
+#                       [0, 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 0],
+#                       [0, 0, 0, 0, 0, 1, 0, 0, dt, 0, 0, 0],
+#                       [0, 0, 0, 0, 0, 0, 1, 0, 0, gx[t], gy[t], gz[t]],
+#                       [0, 0, 0, 0, 0, 0, 0, 1, 0, -gy[t], gx[t], 0],
+#                       [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, gz[t]],
+#                       [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+#                       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+#                       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]])
+#         super().__init__(F, B, H, x0, P0, Q0, R0)
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>> TEST <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 def test_kalman_filter():
