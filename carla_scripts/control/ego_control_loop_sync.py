@@ -15,6 +15,7 @@ from utils.car_sync_mode import mCar
 from utils.visualizer import visualize_waypoint
 from utils.udp_server import send_custom_data
 from utils.controller import FeedForward_pid_Controller
+from utils.filter import CarlaIMULowPassFilter
 
 # neural network
 network_path = os.path.join(current_path,"../neural")
@@ -81,6 +82,19 @@ data_to_send = {
                                 "z":0.0,
                                 },
                 "throttle": 0.0,
+
+                "filtered":{
+                    "acceleration":{
+                        "x":0.0,
+                        "y":0.0,
+                        "z":0.0,
+                        },
+                    "gyro":{
+                        "x":0.0,
+                        "y":0.0,
+                        "z":0.0,
+                        },
+                            }
                 }
             }
 
@@ -93,6 +107,15 @@ run_time = 0
 ego_car = mCar(client, spawn_point=spawn_point)
 ego_car.set_global_plan(route)
 ego_car.get_focus() # make spectator follow the ego car
+
+# imu filter and imu data
+use_filter = "simple_low_pass"
+
+if use_filter == "simple_low_pass":
+    imu_filter = CarlaIMULowPassFilter(0.8)
+    imu_data = [0 for _ in range(6)]
+elif use_filter == "kalman":
+    pass
 
 # camera
 def loop_5ms_loop(loop_name="5ms loop", run_time=None):
@@ -112,6 +135,23 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
 
 
     send_custom_data(data_to_send)
+    # <<<<<< send data to plotjuggler <<<<<<<<<
+
+    # >>>>>>>>>>>>>>>>> filt >>>>>>>>>>>>>>>>>>
+
+    # a simple low pass filter
+    imu_filter.update(ego_car.imu_data)
+    imu_data = imu_filter.state
+    # <<<<<<<<<<<<<<<<< filt <<<<<<<<<<<<<<<<<<<
+
+    # >>>>>> send data to plotjuggler >>>>>>>>
+    data_to_send["custom data"]["filtered"]["acceleration"]["x"] = imu_data[0]
+    data_to_send["custom data"]["filtered"]["acceleration"]["y"] = imu_data[1]
+    data_to_send["custom data"]["filtered"]["acceleration"]["z"] = imu_data[2]
+
+    data_to_send["custom data"]["filtered"]["gyro"]["x"] = imu_data[3]
+    data_to_send["custom data"]["filtered"]["gyro"]["y"] = imu_data[4]
+    data_to_send["custom data"]["filtered"]["gyro"]["z"] = imu_data[5]
     # <<<<<< send data to plotjuggler <<<<<<<<<
 
 def loop_10ms_loop(loop_name="10ms loop", target_vel=10, run_time=None):

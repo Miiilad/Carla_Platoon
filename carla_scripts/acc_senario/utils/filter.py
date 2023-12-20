@@ -82,6 +82,30 @@ class AccSpeedPosKF(KalmanFilter):
 #                       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
 #                       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]])
 #         super().__init__(F, B, H, x0, P0, Q0, R0)
+    
+class LowPassFilter:
+    def __init__(self, alpha = 0.6):
+        self.alpha = alpha
+        self.x = None
+
+    def update(self, measurement):
+        if self.x is None:
+            self.x = measurement
+        else:
+            self.x = self.alpha * measurement + (1 - self.alpha) * self.x
+
+    @property
+    def state(self):
+        return self.x
+
+# import imu class from carla
+class CarlaIMULowPassFilter(LowPassFilter):
+    def __init__(self, alpha = 0.8):
+        super().__init__(alpha)
+
+    def update(self, measurement):
+        measurement = np.array([measurement.accelerometer.x, measurement.accelerometer.y, measurement.accelerometer.z, measurement.gyroscope.x, measurement.gyroscope.y, measurement.gyroscope.z])
+        super().update(measurement)
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>> TEST <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 def test_kalman_filter():
