@@ -103,10 +103,36 @@ data_to_send = {
 init_time = 0
 run_time = 0
 
-# run the ego car
+# spawn the ego car
 ego_car = mCar(client, spawn_point=spawn_point)
 ego_car.set_global_plan(route)
 ego_car.get_focus() # make spectator follow the ego car
+
+
+# spawn the lead vehicle 20 meters ahead of the ego vehicle
+reference_vehicle_transform = ego_car.vehicle.get_transform()
+forward_vector = reference_vehicle_transform.rotation.get_forward_vector()
+spawn_distance = 20.0
+new_position = reference_vehicle_transform.location + spawn_distance * forward_vector
+# Use the same orientation as the reference vehicle
+new_rotation = reference_vehicle_transform.rotation
+
+# Create a new transform for the spawned vehicle
+new_transform = carla.Transform(new_position, new_rotation)
+
+# Spawn the lead vehicle
+lead_car = mCar(client, spawn_point=new_transform, name='leader')
+
+# get the planed route
+start_point_2 = lead_car.spawn_point
+route2 = grp.trace_route(start_point_2.location, end_point.location)
+
+# visualize the route
+visualize_waypoint(client, route, sampling_resolution)
+
+# local planner for the leader car
+lead_car.set_global_plan(route2)
+
 
 # imu filter and imu data
 use_filter = "simple_low_pass"
