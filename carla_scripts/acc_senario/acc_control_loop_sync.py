@@ -55,7 +55,8 @@ grp = GlobalRoutePlanner(town_map, sampling_resolution)
 
 # set the start and end point
 start_point = spawn_point
-end_point = carla.Transform(carla.Location(x=340.665466, y=37.541804, z=1.720345))
+end_point = carla.Transform(carla.Location(x=500.665466, y=37.541804, z=1.720345))
+# end_point = carla.Transform(carla.Location(x=340.665466, y=37.541804, z=1.720345))
 # end_point = carla.Transform(carla.Location(x=340.665466, y=33.541804, z=1.720345))
 
 
@@ -166,9 +167,9 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     data_to_send["custom data"]["velocity"]["y"] = ego_car._velocity.y
     data_to_send["custom data"]["velocity"]["z"] = ego_car._velocity.z
 
-    # data_to_send["custom data"]["velocity"]["x"] = lead_car._velocity.x
-    # data_to_send["custom data"]["velocity"]["y"] = lead_car._velocity.y
-    # data_to_send["custom data"]["velocity"]["z"] = lead_car._velocity.z
+    data_to_send["custom data"]["velocity"]["x"] = lead_car._velocity.x
+    data_to_send["custom data"]["velocity"]["y"] = lead_car._velocity.y
+    data_to_send["custom data"]["velocity"]["z"] = lead_car._velocity.z
 
 
 
