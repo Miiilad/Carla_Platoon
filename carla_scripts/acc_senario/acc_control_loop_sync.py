@@ -55,7 +55,8 @@ grp = GlobalRoutePlanner(town_map, sampling_resolution)
 
 # set the start and end point
 start_point = spawn_point
-end_point = carla.Transform(carla.Location(x=340.665466, y=37.541804, z=1.720345))
+end_point = carla.Transform(carla.Location(x=500.665466, y=37.541804, z=1.720345))
+# end_point = carla.Transform(carla.Location(x=340.665466, y=37.541804, z=1.720345))
 # end_point = carla.Transform(carla.Location(x=340.665466, y=33.541804, z=1.720345))
 
 
@@ -104,10 +105,9 @@ ego_car.get_focus() # make spectator follow the ego car
 time.sleep(2)
 ########### spawn the lead vehicle 20 meters ahead of the ego vehicle
 reference_vehicle_transform = ego_car.vehicle.get_transform()
+print(reference_vehicle_transform)
 reference_vehicle_transform = spawn_point
-# print(spawn_point)
-# print(reference_vehicle_transform)
-
+print(spawn_point)
 
 forward_vector = reference_vehicle_transform.rotation.get_forward_vector()
 spawn_distance = 20.0
@@ -162,9 +162,9 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     data_to_send["custom data"]["velocity"]["y"] = ego_car._velocity.y
     data_to_send["custom data"]["velocity"]["z"] = ego_car._velocity.z
 
-    # data_to_send["custom data"]["velocity"]["x"] = lead_car._velocity.x
-    # data_to_send["custom data"]["velocity"]["y"] = lead_car._velocity.y
-    # data_to_send["custom data"]["velocity"]["z"] = lead_car._velocity.z
+    data_to_send["custom data"]["velocity"]["x"] = lead_car._velocity.x
+    data_to_send["custom data"]["velocity"]["y"] = lead_car._velocity.y
+    data_to_send["custom data"]["velocity"]["z"] = lead_car._velocity.z
 
     data_to_send["custom data"]["target_vel"] = target_vel
 
@@ -196,14 +196,14 @@ def loop_10ms_loop(loop_name="10ms loop", target_vel=10, run_time=None):
     data_to_send["custom data"]["throttle"] = throttle
 
     lead_car.run_speed = target_vel 
-    done = lead_car.lp_control_run_step()
+    done = lead_car.lp_control_run_step(throttle=throttle)
 
     return done
 
 
 def loop_20ms_loop(loop_name="20ms loop"):
     # this loop is for MPC
-    target_vel = 100
+    target_vel = 10
     return target_vel
     
 
