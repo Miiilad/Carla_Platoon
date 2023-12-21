@@ -25,7 +25,7 @@ weather = carla.WeatherParameters(cloudiness=0.0, precipitation=0.0, sun_altitud
 
 # get the spawn point
 spawn_points = world.get_map().get_spawn_points()
-spawn_point = spawn_points[171]
+spawn_point = spawn_points[71]
 
 # spawn ego car
 ego_car = mCar(client, spawn_point=spawn_point, name='ego')

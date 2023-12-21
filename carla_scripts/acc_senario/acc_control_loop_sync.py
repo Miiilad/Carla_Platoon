@@ -44,8 +44,7 @@ settings.max_substeps = 10
 world.apply_settings(settings)
 
 spawn_points = world.get_map().get_spawn_points()
-spawn_point = spawn_points[171]
-
+spawn_point = spawn_points[90]
 # get the map
 town_map = world.get_map()
 roads = town_map.get_topology()
@@ -59,11 +58,6 @@ start_point = spawn_point
 end_point = carla.Transform(carla.Location(x=340.665466, y=37.541804, z=1.720345))
 # end_point = carla.Transform(carla.Location(x=340.665466, y=33.541804, z=1.720345))
 
-# get the planed route
-route = grp.trace_route(start_point.location, end_point.location)
-
-# visualize the route
-visualize_waypoint(client, route, sampling_resolution)
 
 # local planner for the ego car
 # ego_car.trig_autopilot()
@@ -104,13 +98,17 @@ init_time = 0
 run_time = 0
 
 # spawn the ego car
-ego_car = mCar(client, spawn_point=spawn_point)
-ego_car.set_global_plan(route)
+ego_car = mCar(client, spawn_point=spawn_point,name='ego')
 ego_car.get_focus() # make spectator follow the ego car
 
-
-# spawn the lead vehicle 20 meters ahead of the ego vehicle
+time.sleep(2)
+########### spawn the lead vehicle 20 meters ahead of the ego vehicle
 reference_vehicle_transform = ego_car.vehicle.get_transform()
+reference_vehicle_transform = spawn_point
+# print(spawn_point)
+# print(reference_vehicle_transform)
+
+
 forward_vector = reference_vehicle_transform.rotation.get_forward_vector()
 spawn_distance = 20.0
 new_position = reference_vehicle_transform.location + spawn_distance * forward_vector
@@ -127,10 +125,17 @@ lead_car = mCar(client, spawn_point=new_transform, name='leader')
 start_point_2 = lead_car.spawn_point
 route2 = grp.trace_route(start_point_2.location, end_point.location)
 
+
+# get the planed route
+route = grp.trace_route(start_point.location, end_point.location)
+
+# visualize the route
+visualize_waypoint(client, route, sampling_resolution)
 # visualize the route
 visualize_waypoint(client, route, sampling_resolution)
 
 # local planner for the leader car
+ego_car.set_global_plan(route)
 lead_car.set_global_plan(route2)
 
 
@@ -156,6 +161,10 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     data_to_send["custom data"]["velocity"]["x"] = ego_car._velocity.x
     data_to_send["custom data"]["velocity"]["y"] = ego_car._velocity.y
     data_to_send["custom data"]["velocity"]["z"] = ego_car._velocity.z
+
+    # data_to_send["custom data"]["velocity"]["x"] = lead_car._velocity.x
+    # data_to_send["custom data"]["velocity"]["y"] = lead_car._velocity.y
+    # data_to_send["custom data"]["velocity"]["z"] = lead_car._velocity.z
 
     data_to_send["custom data"]["target_vel"] = target_vel
 
@@ -186,12 +195,15 @@ def loop_10ms_loop(loop_name="10ms loop", target_vel=10, run_time=None):
     done = ego_car.lp_control_run_step(throttle=throttle)
     data_to_send["custom data"]["throttle"] = throttle
 
+    lead_car.run_speed = target_vel 
+    done = lead_car.lp_control_run_step()
+
     return done
 
 
 def loop_20ms_loop(loop_name="20ms loop"):
     # this loop is for MPC
-    target_vel = 10 + math.sin(run_time)
+    target_vel = 100
     return target_vel
     
 

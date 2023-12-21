@@ -27,7 +27,7 @@ class mCar:
         self.vehicle = world.try_spawn_actor(ego_bp, self.spawn_point)
 
         # set the runtime property
-        self.run_speed = 120
+        self.run_speed = 0
 
         # vehicle PHYSICS property
         self.physics = carla.VehiclePhysicsControl()
