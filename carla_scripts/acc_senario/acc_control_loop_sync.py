@@ -142,7 +142,7 @@ ego_car.set_global_plan(route)
 lead_car.set_global_plan(route2)
 
 # set the speed of the lead car 
-lead_car.set_speed(60)
+lead_car.set_speed(100)
 
 # imu filter and imu data
 use_filter = "simple_low_pass"
@@ -197,7 +197,7 @@ def loop_10ms_loop(loop_name="10ms loop", target_distance=10, run_time=None):
 
 
     done = lead_car.lp_control_run_step()
-    world.tick()
+    # world.tick()
     leader_tf = lead_car.vehicle.get_transform()
 
 
@@ -233,8 +233,8 @@ record_20ms = 0
 # variables
 throttle = 0
 target_acc = 0
-target_vel = 10
-target_dist = 10
+target_vel = 0
+target_dist = 0
 
 # controller
 controller = FeedForward_pid_Controller()
@@ -281,8 +281,9 @@ while True:
     # >>>> if running just for visualization >>>>>>>>>>>
     # make it more real to the real time
     duration = time.time() - record_start_time
-    if duration < fixed_delta_seconds:
-        time.sleep(fixed_delta_seconds - duration)
+    scale=2
+    if duration < (fixed_delta_seconds*scale):
+        time.sleep((fixed_delta_seconds *scale)- duration)
     # <<<<< if running just for visualization <<<<<<<<<<
 
 
