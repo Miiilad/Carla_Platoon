@@ -70,12 +70,16 @@ data_to_send = {
                                 "y":0.0,
                                 "z":0.0,
                                 },
-                "target_vel": 0.0,
+                "target_dist": 0.0,
                 "velocity":{"x":0.0,
                                 "y":0.0,
                                 "z":0.0,
                                 },
+                "distance":0.0,
                 "throttle": 0.0,
+
+                "lead_car_speed": 0.0,
+                "ego_car_speed": 0.0,
 
                 "filtered":{
                     "acceleration":{
@@ -100,14 +104,11 @@ run_time = 0
 # spawn the ego car
 ego_car = mCar(client, spawn_point=spawn_point,name='ego')
 ego_car.get_focus() # make spectator follow the ego car
+world.tick() 
 
-time.sleep(2)
+# time.sleep(2)
 ########### spawn the lead vehicle 20 meters ahead of the ego vehicle
 reference_vehicle_transform = ego_car.vehicle.get_transform()
-reference_vehicle_transform = spawn_point
-# print(spawn_point)
-# print(reference_vehicle_transform)
-
 
 forward_vector = reference_vehicle_transform.rotation.get_forward_vector()
 spawn_distance = 20.0
@@ -120,6 +121,7 @@ new_transform = carla.Transform(new_position, new_rotation)
 
 # Spawn the lead vehicle
 lead_car = mCar(client, spawn_point=new_transform, name='leader')
+world.tick() 
 
 # get the planed route
 start_point_2 = lead_car.spawn_point
@@ -138,6 +140,8 @@ visualize_waypoint(client, route, sampling_resolution)
 ego_car.set_global_plan(route)
 lead_car.set_global_plan(route2)
 
+# set the speed of the lead car 
+lead_car.set_speed(60)
 
 # imu filter and imu data
 use_filter = "simple_low_pass"
@@ -166,7 +170,6 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # data_to_send["custom data"]["velocity"]["y"] = lead_car._velocity.y
     # data_to_send["custom data"]["velocity"]["z"] = lead_car._velocity.z
 
-    data_to_send["custom data"]["target_vel"] = target_vel
 
 
     send_custom_data(data_to_send)
@@ -189,22 +192,35 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     data_to_send["custom data"]["filtered"]["gyro"]["z"] = imu_data[5]
     # <<<<<< send data to plotjuggler <<<<<<<<<
 
-def loop_10ms_loop(loop_name="10ms loop", target_vel=10, run_time=None):
-    vel_error = target_vel - ego_car._velocity.x
-    throttle = controller.control(vel_error)
-    done = ego_car.lp_control_run_step(throttle=throttle)
-    data_to_send["custom data"]["throttle"] = throttle
+def loop_10ms_loop(loop_name="10ms loop", target_distance=10, run_time=None):
 
-    lead_car.run_speed = target_vel 
+
     done = lead_car.lp_control_run_step()
+    world.tick()
+    leader_tf = lead_car.vehicle.get_transform()
+
+
+
+    # vel_error = target_vel - ego_car._velocity.x
+    distance = ego_car._location.distance(leader_tf.location)
+    distance_error =  distance- target_distance
+    throttle = controller.control(distance_error)
+    data_to_send["custom data"]["throttle"] = throttle
+    done = ego_car.lp_control_run_step(throttle=throttle)
+    print(f"distance error: {distance_error}")
+
+    data_to_send["custom data"]["target_dist"] = target_distance
+    data_to_send["custom data"]["distance"] = distance
+    data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
+    data_to_send["custom data"]["ego_car_speed"] = ego_car._velocity.x
 
     return done
 
 
 def loop_20ms_loop(loop_name="20ms loop"):
     # this loop is for MPC
-    target_vel = 100
-    return target_vel
+    target_dist = 20
+    return target_dist
     
 
 
@@ -217,9 +233,14 @@ record_20ms = 0
 throttle = 0
 target_acc = 0
 target_vel = 10
+target_dist = 10
 
 # controller
 controller = FeedForward_pid_Controller()
+controller.kp = 15
+controller.kd = 200
+controller.ki = 0.1
+
 done = False
 
 while True:
@@ -242,17 +263,17 @@ while True:
     
     if run_time - record_10ms > 0.01:
         # inner loop for speed control
-        done = loop_10ms_loop(target_vel=target_vel, run_time=run_time)
+        done = loop_10ms_loop(target_distance=target_dist, run_time=run_time)
         record_10ms = run_time
     
     if run_time - record_20ms > 0.02:
         # outer loop for MPC
-        target_vel = loop_20ms_loop()
+        target_dist = loop_20ms_loop()
         record_20ms = run_time
     
     # check if local planner reach the end
     # print(f"run time: {run_time}")
-    print(f"ego car location: {ego_car._location}")
+    # print(f"ego car location: {ego_car._location}")
     # <<<<<<<<<<<<<<<<<<<<<< run the loop <<<<<<<<<<<<<<<<<<<<<<
 
 
