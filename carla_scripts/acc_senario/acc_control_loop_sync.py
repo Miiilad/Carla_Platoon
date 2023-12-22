@@ -166,9 +166,9 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     data_to_send["custom data"]["velocity"]["y"] = ego_car._velocity.y
     data_to_send["custom data"]["velocity"]["z"] = ego_car._velocity.z
 
-    data_to_send["custom data"]["velocity"]["x"] = lead_car._velocity.x
-    data_to_send["custom data"]["velocity"]["y"] = lead_car._velocity.y
-    data_to_send["custom data"]["velocity"]["z"] = lead_car._velocity.z
+    # data_to_send["custom data"]["velocity"]["x"] = lead_car._velocity.x
+    # data_to_send["custom data"]["velocity"]["y"] = lead_car._velocity.y
+    # data_to_send["custom data"]["velocity"]["z"] = lead_car._velocity.z
     # <<<<<< send data to plotjuggler <<<<<<<<<
 
     # >>>>>>>>>>>>>>>>> filt >>>>>>>>>>>>>>>>>>
@@ -283,7 +283,7 @@ while True:
     # >>>> if running just for visualization >>>>>>>>>>>
     # make it more real to the real time
     duration = time.time() - record_start_time
-    scale=2
+    scale=1
     if duration < (fixed_delta_seconds*scale):
         time.sleep((fixed_delta_seconds *scale)- duration)
     # <<<<< if running just for visualization <<<<<<<<<<
