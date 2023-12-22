@@ -158,7 +158,6 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # >>>>> send data to plotjuggler >>>>>>>>
     ego_car.update_state(None)
 
-    data_to_send["timestamp"] = run_time
     data_to_send["custom data"]["acceleration"]["x"] = ego_car._acceleration.x
     data_to_send["custom data"]["acceleration"]["y"] = ego_car._acceleration.y
     data_to_send["custom data"]["acceleration"]["z"] = ego_car._acceleration.z
@@ -170,10 +169,6 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     data_to_send["custom data"]["velocity"]["x"] = lead_car._velocity.x
     data_to_send["custom data"]["velocity"]["y"] = lead_car._velocity.y
     data_to_send["custom data"]["velocity"]["z"] = lead_car._velocity.z
-
-
-
-    send_custom_data(data_to_send)
     # <<<<<< send data to plotjuggler <<<<<<<<<
 
     # >>>>>>>>>>>>>>>>> filt >>>>>>>>>>>>>>>>>>
@@ -200,15 +195,13 @@ def loop_10ms_loop(loop_name="10ms loop", target_distance=10, run_time=None):
     # world.tick()
     leader_tf = lead_car.vehicle.get_transform()
 
-
-
     # vel_error = target_vel - ego_car._velocity.x
     distance = ego_car._location.distance(leader_tf.location)
     distance_error =  distance- target_distance
     throttle = controller.control(distance_error)
     data_to_send["custom data"]["throttle"] = throttle
     done = ego_car.lp_control_run_step(throttle=throttle)
-    print(f"distance error: {distance_error}")
+    # print(f"distance error: {distance_error}")
 
     data_to_send["custom data"]["target_dist"] = target_distance
     data_to_send["custom data"]["distance"] = distance
@@ -243,7 +236,7 @@ controller.kd = 200
 controller.ki = 0.1
 
 done = False
-
+count = 0   
 while True:
     # >>>>>>>>>>> record program execution time >>>>>>>>>>>>
     record_start_time = time.time()
@@ -276,6 +269,15 @@ while True:
     # print(f"run time: {run_time}")
     # print(f"ego car location: {ego_car._location}")
     # <<<<<<<<<<<<<<<<<<<<<< run the loop <<<<<<<<<<<<<<<<<<<<<<
+
+
+
+    # >>>>>>> update the time stamp & send the data for plot juggler >>>>>>>>>
+    snapshot = world.get_snapshot()
+    platform_timestamp = snapshot.timestamp.platform_timestamp
+    data_to_send["timestamp"] = platform_timestamp
+    send_custom_data(data_to_send)
+    # <<<<<<<< update the time stamp & send the data for plot juggler <<<<<<<<<<<<
 
 
     # >>>> if running just for visualization >>>>>>>>>>>
