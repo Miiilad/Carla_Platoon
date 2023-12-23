@@ -10,14 +10,14 @@ def saturate(value, min=0, max=1):
     return value
 
 class FeedForward_pid_Controller:
-    def __init__(self, feedforward_gain=0):
+    def __init__(self, P_value,I_value,D_value,feedforward_gain=0):
         # for feedforward
         self.feedforward_gain = feedforward_gain
 
         # for pid
-        self.kp = 5
-        self.kd = 25
-        self.ki = 0.15
+        self.kp = P_value
+        self.kd = D_value
+        self.ki = I_value
         self.integral = 0
 
         self.prev_input = 0
