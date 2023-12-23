@@ -111,40 +111,38 @@ world.tick()
 ########### spawn the lead vehicle 20 meters ahead of the ego vehicle
 reference_vehicle_transform = lead_car.vehicle.get_transform()
 
-forward_vector = reference_vehicle_transform.rotation.get_forward_vector()
-spawn_distance = 20.0
-new_position = reference_vehicle_transform.location - spawn_distance * forward_vector
-# Use the same orientation as the reference vehicle
-new_rotation = reference_vehicle_transform.rotation
-
-# Create a new transform for the spawned vehicle
-new_transform = carla.Transform(new_position, new_rotation)
-
 # spawn the ego car
-len_of_platoon=2
+len_of_platoon=3
 ego_car=[]
 for i in range(len_of_platoon):
     print(i)
-    ego_car.append( mCar(client, spawn_point=new_transform,name='ego{}'.format(i)))
+    forward_vector = reference_vehicle_transform.rotation.get_forward_vector()
+    spawn_distance = 10.0
+    new_position = reference_vehicle_transform.location - spawn_distance * forward_vector
+    # Use the same orientation as the reference vehicle
+    new_rotation = reference_vehicle_transform.rotation
+
+    # Create a new transform for the spawned vehicle
+    new_transform = carla.Transform(new_position, new_rotation)
+    ego_car.append(mCar(client, spawn_point=new_transform,name='ego{}'.format(i)))
     ego_car[-1].get_focus() # make spectator follow the ego car
     world.tick() 
+    reference_vehicle_transform = ego_car[i].vehicle.get_transform()
 
 # get the planed route
 start_point_2 = lead_car.spawn_point
-route2 = grp.trace_route(start_point_2.location, end_point.location)
+route_leader = grp.trace_route(start_point_2.location, end_point.location)
 
-
-# get the planed route
-route = grp.trace_route(start_point.location, end_point.location)
-
-# visualize the route
-visualize_waypoint(client, route, sampling_resolution)
-# visualize the route
-visualize_waypoint(client, route, sampling_resolution)
+# get the planed route for ego
+route_ego = grp.trace_route(start_point.location, end_point.location)
+# visualize the route for leader
+visualize_waypoint(client, route_leader, sampling_resolution)
+# # visualize the route
+# visualize_waypoint(client, route_ego, sampling_resolution)
 
 # local planner for the leader car
-ego_car.set_global_plan(route)
-lead_car.set_global_plan(route2)
+ego_car[0].set_global_plan(route_ego)
+lead_car.set_global_plan(route_leader)
 
 # set the speed of the lead car 
 lead_car.set_speed(100)
@@ -161,15 +159,15 @@ elif use_filter == "kalman":
 # camera
 def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # >>>>> send data to plotjuggler >>>>>>>>
-    ego_car.update_state(None)
+    ego_car[0].update_state(None)
 
-    data_to_send["custom data"]["acceleration"]["x"] = ego_car._acceleration.x
-    data_to_send["custom data"]["acceleration"]["y"] = ego_car._acceleration.y
-    data_to_send["custom data"]["acceleration"]["z"] = ego_car._acceleration.z
+    data_to_send["custom data"]["acceleration"]["x"] = ego_car[0]._acceleration.x
+    data_to_send["custom data"]["acceleration"]["y"] = ego_car[0]._acceleration.y
+    data_to_send["custom data"]["acceleration"]["z"] = ego_car[0]._acceleration.z
 
-    data_to_send["custom data"]["velocity"]["x"] = ego_car._velocity.x
-    data_to_send["custom data"]["velocity"]["y"] = ego_car._velocity.y
-    data_to_send["custom data"]["velocity"]["z"] = ego_car._velocity.z
+    data_to_send["custom data"]["velocity"]["x"] = ego_car[0]._velocity.x
+    data_to_send["custom data"]["velocity"]["y"] = ego_car[0]._velocity.y
+    data_to_send["custom data"]["velocity"]["z"] = ego_car[0]._velocity.z
 
     # data_to_send["custom data"]["velocity"]["x"] = lead_car._velocity.x
     # data_to_send["custom data"]["velocity"]["y"] = lead_car._velocity.y
@@ -179,7 +177,7 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # >>>>>>>>>>>>>>>>> filt >>>>>>>>>>>>>>>>>>
 
     # a simple low pass filter
-    imu_filter.update(ego_car.imu_data)
+    imu_filter.update(ego_car[0].imu_data)
     imu_data = imu_filter.state
     # <<<<<<<<<<<<<<<<< filt <<<<<<<<<<<<<<<<<<<
 
@@ -200,25 +198,25 @@ def loop_10ms_loop(loop_name="10ms loop", target_distance=10, run_time=None):
     # world.tick()
     leader_tf = lead_car.vehicle.get_transform()
 
-    # vel_error = target_vel - ego_car._velocity.x
-    distance = ego_car._location.distance(leader_tf.location)
+    # vel_error = target_vel - ego_car[0]._velocity.x
+    distance = ego_car[0]._location.distance(leader_tf.location)
     distance_error =  distance- target_distance
     throttle = controller.control(distance_error)
     data_to_send["custom data"]["throttle"] = throttle
-    done = ego_car.lp_control_run_step(throttle=throttle)
+    done = ego_car[0].lp_control_run_step(throttle=throttle)
     # print(f"distance error: {distance_error}")
 
     data_to_send["custom data"]["target_dist"] = target_distance
     data_to_send["custom data"]["distance"] = distance
     data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
-    data_to_send["custom data"]["ego_car_speed"] = ego_car._velocity.x
+    data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
 
     return done
 
 
 def loop_20ms_loop(loop_name="20ms loop"):
     # this loop is for MPC
-    target_dist = 20
+    target_dist = 10
     return target_dist
     
 
@@ -251,7 +249,7 @@ while True:
     # >>>>>>>>>>>>>>>>>>> get focus >>>>>>>>>>>>>>>>>>>
     run_time = run_time + fixed_delta_seconds
     world.tick()
-    ego_car.get_focus()
+    ego_car[-1].get_focus()
     # <<<<<<<<<<<<<<<<<<< get focus <<<<<<<<<<<<<<<<<<<
 
 
@@ -272,7 +270,7 @@ while True:
     
     # check if local planner reach the end
     # print(f"run time: {run_time}")
-    # print(f"ego car location: {ego_car._location}")
+    # print(f"ego car location: {ego_car[0]._location}")
     # <<<<<<<<<<<<<<<<<<<<<< run the loop <<<<<<<<<<<<<<<<<<<<<<
 
 
@@ -298,6 +296,6 @@ while True:
         # end the thread
         break
 
-ego_car.destroy()
+ego_car[0].destroy()
 
 world.tick() # to make sure the client receives the last data, and the vehicle is destroyed before the client
