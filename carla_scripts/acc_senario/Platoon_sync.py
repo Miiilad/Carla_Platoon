@@ -299,7 +299,7 @@ while True:
     # <<<<< if running just for visualization <<<<<<<<<<
 
 
-    if run_time > 100 or done:
+    if run_time > 200 or done:
         # end the thread
         break
 
