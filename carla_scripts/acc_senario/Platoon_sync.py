@@ -126,8 +126,8 @@ ego_car=[]
 for i in range(len_of_platoon):
     print(i)
     ego_car.append( mCar(client, spawn_point=new_transform,name='ego{}'.format(i)))
-ego_car[-1].get_focus() # make spectator follow the ego car
-world.tick() 
+    ego_car[-1].get_focus() # make spectator follow the ego car
+    world.tick() 
 
 # get the planed route
 start_point_2 = lead_car.spawn_point
