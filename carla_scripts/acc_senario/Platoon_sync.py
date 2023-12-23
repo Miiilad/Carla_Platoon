@@ -114,6 +114,7 @@ reference_vehicle_transform = lead_car.vehicle.get_transform()
 # spawn the ego car
 len_of_platoon=3
 ego_car=[]
+route_ego=[]
 for i in range(len_of_platoon):
     print(i)
     forward_vector = reference_vehicle_transform.rotation.get_forward_vector()
@@ -127,21 +128,23 @@ for i in range(len_of_platoon):
     ego_car.append(mCar(client, spawn_point=new_transform,name='ego{}'.format(i)))
     ego_car[-1].get_focus() # make spectator follow the ego car
     world.tick() 
+    # get the planed route for ego
+    route_ego.append(grp.trace_route(new_transform.location, end_point.location))
     reference_vehicle_transform = ego_car[i].vehicle.get_transform()
 
 # get the planed route
 start_point_2 = lead_car.spawn_point
 route_leader = grp.trace_route(start_point_2.location, end_point.location)
 
-# get the planed route for ego
-route_ego = grp.trace_route(start_point.location, end_point.location)
+
 # visualize the route for leader
 visualize_waypoint(client, route_leader, sampling_resolution)
 # # visualize the route
 # visualize_waypoint(client, route_ego, sampling_resolution)
 
 # local planner for the leader car
-ego_car[0].set_global_plan(route_ego)
+for i in range(len_of_platoon):
+    ego_car[i].set_global_plan(route_ego[i])
 lead_car.set_global_plan(route_leader)
 
 # set the speed of the lead car 
@@ -196,16 +199,17 @@ def loop_10ms_loop(loop_name="10ms loop", target_distance=10, run_time=None):
 
     done = lead_car.lp_control_run_step()
     # world.tick()
-    leader_tf = lead_car.vehicle.get_transform()
+    target_location = lead_car.vehicle.get_transform().location
+    
+    for i in range(len_of_platoon):
+        distance = ego_car[i]._location.distance(target_location)
+        distance_error =  distance- target_distance
+        throttle = controller[i].control(distance_error)
+        done = ego_car[i].lp_control_run_step(throttle=throttle)
+        target_location = ego_car[i].vehicle.get_transform().location
 
-    # vel_error = target_vel - ego_car[0]._velocity.x
-    distance = ego_car[0]._location.distance(leader_tf.location)
-    distance_error =  distance- target_distance
-    throttle = controller.control(distance_error)
-    data_to_send["custom data"]["throttle"] = throttle
-    done = ego_car[0].lp_control_run_step(throttle=throttle)
     # print(f"distance error: {distance_error}")
-
+    data_to_send["custom data"]["throttle"] = throttle
     data_to_send["custom data"]["target_dist"] = target_distance
     data_to_send["custom data"]["distance"] = distance
     data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
@@ -216,7 +220,7 @@ def loop_10ms_loop(loop_name="10ms loop", target_distance=10, run_time=None):
 
 def loop_20ms_loop(loop_name="20ms loop"):
     # this loop is for MPC
-    target_dist = 10
+    target_dist = 20
     return target_dist
     
 
@@ -233,10 +237,13 @@ target_vel = 0
 target_dist = 0
 
 # controller
-controller = FeedForward_pid_Controller()
-controller.kp = 15
-controller.kd = 200
-controller.ki = 0.1
+kp = 15
+kd = 200
+ki = 0.1
+controller=[]
+for i in range(len_of_platoon):
+    controller.append(FeedForward_pid_Controller(kp,kd,ki))
+
 
 done = False
 count = 0   
