@@ -24,7 +24,7 @@ sys.path.append(network_path)
 client = carla.Client('carla_server', 2000)
 world = client.get_world()
 # world = client.load_world("Town04_Opt")
-world = client.load_world("Town04_Opt")
+world = client.load_world("Town03_Opt")
 
 # set for the fixed simulation step ref: https://carla.readthedocs.io/en/latest/adv_synchrony_timestep/#fixed-time-step
 # settings = world.get_settings()
@@ -44,13 +44,13 @@ settings.max_substeps = 10
 world.apply_settings(settings)
 
 spawn_points = world.get_map().get_spawn_points()
-spawn_point = spawn_points[90]
+spawn_point = spawn_points[45]
 # get the map
 town_map = world.get_map()
 roads = town_map.get_topology()
 
 # planner for the ego car
-sampling_resolution = 2.0
+sampling_resolution = 1
 grp = GlobalRoutePlanner(town_map, sampling_resolution)
 
 # set the start and end point
@@ -112,7 +112,7 @@ world.tick()
 reference_vehicle_transform = lead_car.vehicle.get_transform()
 
 # spawn the ego car
-len_of_platoon=3
+len_of_platoon=4
 ego_car=[]
 route_ego=[]
 for i in range(len_of_platoon):
@@ -204,8 +204,8 @@ def loop_10ms_loop(loop_name="10ms loop", target_distance=10, run_time=None):
     for i in range(len_of_platoon):
         distance = ego_car[i]._location.distance(target_location)
         distance_error =  distance- target_distance
-        throttle = controller[i].control(distance_error)
-        done = ego_car[i].lp_control_run_step(throttle=throttle)
+        throttle,brake = controller[i].control(distance_error)
+        done = ego_car[i].lp_control_run_step(brake = brake, throttle=throttle)
         target_location = ego_car[i].vehicle.get_transform().location
 
     # print(f"distance error: {distance_error}")
@@ -237,12 +237,13 @@ target_vel = 0
 target_dist = 0
 
 # controller
-kp = 15
-kd = 200
-ki = 0.1
-controller=[]
-for i in range(len_of_platoon):
-    controller.append(FeedForward_pid_Controller(kp,kd,ki))
+kp = 5
+kd = 0
+ki = 50
+#For Longitudinal control
+controller=[FeedForward_pid_Controller(kp,kd,ki) for i in range(len_of_platoon)]
+
+
 
 
 done = False
