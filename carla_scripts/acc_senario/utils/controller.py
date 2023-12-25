@@ -58,4 +58,10 @@ class FeedForward_pid_Controller:
         # low pass filter
         #value = self.smooth_fcn(value)
         # saturate: the value of the throttle should be in [0, 1]
-        return saturate(value)
+        if value>=0:
+            throttle = saturate(value)
+            brake = 0
+        else:
+            throttle = 0
+            brake = saturate(-0.01*value) 
+        return throttle, brake
