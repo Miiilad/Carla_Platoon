@@ -44,7 +44,7 @@ settings.max_substeps = 10
 world.apply_settings(settings)
 
 spawn_points = world.get_map().get_spawn_points()
-spawn_point = spawn_points[45]
+spawn_point = spawn_points[20]
 # get the map
 town_map = world.get_map()
 roads = town_map.get_topology()
@@ -55,10 +55,10 @@ grp = GlobalRoutePlanner(town_map, sampling_resolution)
 
 # set the start and end point
 start_point = spawn_point
-end_point = carla.Transform(carla.Location(x=500.665466, y=37.541804, z=1.720345))
+end_point = carla.Transform(carla.Location(x=900.665466, y=200.541804, z=1.720345))
 # end_point = carla.Transform(carla.Location(x=340.665466, y=37.541804, z=1.720345))
 # end_point = carla.Transform(carla.Location(x=340.665466, y=33.541804, z=1.720345))
-
+# end_point = carla.Transform(carla.Location(x=700.665466, y=100.541804, z=1.720345))
 
 # local planner for the ego car
 # ego_car.trig_autopilot()
