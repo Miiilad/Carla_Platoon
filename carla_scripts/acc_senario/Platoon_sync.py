@@ -266,12 +266,12 @@ while True:
         loop_5ms_loop(run_time=run_time)
         record_5ms = run_time
     
-    if run_time - record_10ms > 0.01:
+    if run_time - record_10ms > 0.1:
         # inner loop for speed control
         done = loop_10ms_loop(target_distance=target_dist, run_time=run_time)
         record_10ms = run_time
     
-    if run_time - record_20ms > 0.02:
+    if run_time - record_20ms > 0.2:
         # outer loop for MPC
         target_dist = loop_20ms_loop()
         record_20ms = run_time
