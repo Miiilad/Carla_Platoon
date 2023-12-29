@@ -162,6 +162,7 @@ elif use_filter == "kalman":
 # camera
 def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # >>>>> send data to plotjuggler >>>>>>>>
+    done = lead_car.lp_control_run_step()
     ego_car[0].update_state(None)
 
     data_to_send["custom data"]["acceleration"]["x"] = ego_car[0]._acceleration.x
@@ -194,10 +195,33 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     data_to_send["custom data"]["filtered"]["gyro"]["z"] = imu_data[5]
     # <<<<<< send data to plotjuggler <<<<<<<<<
 
-def loop_10ms_loop(loop_name="10ms loop", target_distance=10, run_time=None):
+def inner_control_loop(loop_name="10ms loop", target_distance=10, run_time=None):
+    pass
+
+    # done = lead_car.lp_control_run_step()
+    # # world.tick()
+    # target_location = lead_car.vehicle.get_transform().location
+    
+    # for i in range(len_of_platoon):
+    #     distance = ego_car[i]._location.distance(target_location)
+    #     distance_error =  distance- target_distance
+    #     throttle,brake = controller[i].control(distance_error)
+    #     done = ego_car[i].lp_control_run_step(brake = brake, throttle=throttle)
+    #     target_location = ego_car[i].vehicle.get_transform().location
+
+    # # print(f"distance error: {distance_error}")
+    # data_to_send["custom data"]["throttle"] = throttle
+    # data_to_send["custom data"]["target_dist"] = target_distance
+    # data_to_send["custom data"]["distance"] = distance
+    # data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
+    # data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
+
+    # return done
+
+def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None):
 
 
-    done = lead_car.lp_control_run_step()
+
     # world.tick()
     target_location = lead_car.vehicle.get_transform().location
     
@@ -227,7 +251,8 @@ def loop_20ms_loop(loop_name="20ms loop"):
 
 # variables for the loop
 record_5ms = 0
-record_10ms = 0
+record_inner = 0
+record_outer = 0
 record_20ms = 0
 
 # variables
@@ -265,11 +290,16 @@ while True:
     if run_time - record_5ms > 0.005:
         loop_5ms_loop(run_time=run_time)
         record_5ms = run_time
-    
-    if run_time - record_10ms > 0.1:
+
+    if run_time - record_inner > 0.01:
         # inner loop for speed control
-        done = loop_10ms_loop(target_distance=target_dist, run_time=run_time)
-        record_10ms = run_time
+        done = inner_control_loop(target_distance=target_dist, run_time=run_time)
+        record_inner = run_time
+    
+    if run_time - record_outer > 0.1:
+        # inner loop for speed control
+        done = outer_control_loop(target_distance=target_dist, run_time=run_time)
+        record_outer = run_time
     
     if run_time - record_20ms > 0.2:
         # outer loop for MPC
