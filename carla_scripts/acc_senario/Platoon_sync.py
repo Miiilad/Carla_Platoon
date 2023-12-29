@@ -162,8 +162,11 @@ elif use_filter == "kalman":
 # camera
 def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # >>>>> send data to plotjuggler >>>>>>>>
-    done = lead_car.lp_control_run_step()
-    ego_car[0].update_state(None)
+    # done = lead_car.lp_control_run_step()
+    [ego_car[i].update_state(None) for i in range(len_of_platoon)]
+    acceleration_list=[ego_car[i]._acceleration.x for i in range(len_of_platoon)]
+    acceleration_lead=lead_car._acceleration.x 
+    
 
     data_to_send["custom data"]["acceleration"]["x"] = ego_car[0]._acceleration.x
     data_to_send["custom data"]["acceleration"]["y"] = ego_car[0]._acceleration.y
@@ -196,7 +199,22 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # <<<<<< send data to plotjuggler <<<<<<<<<
 
 def inner_control_loop(loop_name="10ms loop", target_distance=10, run_time=None):
-    pass
+    # target_acceleration = [1]*len_of_platoon
+    
+    for i in range(len_of_platoon):
+        acceleration_error =  target_acceleration[i]-acceleration_list[i]
+        throttle,brake = controller[i].control(acceleration_error)
+        done = ego_car[i].lp_control_run_step(brake = brake, throttle=throttle)
+        target_location = ego_car[i].vehicle.get_transform().location
+
+    # print(f"distance error: {distance_error}")
+    data_to_send["custom data"]["throttle"] = throttle
+    data_to_send["custom data"]["target_dist"] = target_distance
+    # data_to_send["custom data"]["distance"] = distance
+    data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
+    data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
+
+    return done
 
     # done = lead_car.lp_control_run_step()
     # # world.tick()
@@ -221,7 +239,6 @@ def inner_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
 def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None):
 
 
-
     # world.tick()
     target_location = lead_car.vehicle.get_transform().location
     
@@ -229,8 +246,9 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         distance = ego_car[i]._location.distance(target_location)
         distance_error =  distance- target_distance
         throttle,brake = controller[i].control(distance_error)
-        done = ego_car[i].lp_control_run_step(brake = brake, throttle=throttle)
-        target_location = ego_car[i].vehicle.get_transform().location
+        target_acceleration[i] = throttle-brake
+    print(target_acceleration)
+        
 
     # print(f"distance error: {distance_error}")
     data_to_send["custom data"]["throttle"] = throttle
@@ -261,19 +279,17 @@ target_acc = 0
 target_vel = 0
 target_dist = 0
 
-# controller
-kp = 5
-kd = 0
-ki = 50
 #For Longitudinal control
-controller=[FeedForward_pid_Controller(kp,kd,ki) for i in range(len_of_platoon)]
-
-
-
+controller=[FeedForward_pid_Controller(kp=5,ki=0,kd=50) for i in range(len_of_platoon)]
+controller_inner=[FeedForward_pid_Controller(kp=5,ki=1,kd=50) for i in range(len_of_platoon)]
+controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=50) for i in range(len_of_platoon)]
+acceleration_list=[0]*len_of_platoon
+target_acceleration=[0]*len_of_platoon
 
 done = False
 count = 0   
 while True:
+    lead_car.lp_control_run_step()
     # >>>>>>>>>>> record program execution time >>>>>>>>>>>>
     record_start_time = time.time()
     # <<<<<<<<<<<< record program execution time <<<<<<<<<<<<
