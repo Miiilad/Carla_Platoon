@@ -281,8 +281,8 @@ target_dist = 0
 
 #For Longitudinal control
 controller=[FeedForward_pid_Controller(kp=5,ki=0,kd=50) for i in range(len_of_platoon)]
-controller_inner=[FeedForward_pid_Controller(kp=5,ki=1,kd=50) for i in range(len_of_platoon)]
-controller_outer=[FeedForward_pid_Controller(kp=10,ki=1,kd=0) for i in range(len_of_platoon)]
+controller_inner=[FeedForward_pid_Controller(kp=10,ki=1,kd=60) for i in range(len_of_platoon)]
+controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=60) for i in range(len_of_platoon)]
 acceleration_list=[0]*len_of_platoon
 target_acceleration=[0]*len_of_platoon
 
