@@ -112,7 +112,7 @@ world.tick()
 reference_vehicle_transform = lead_car.vehicle.get_transform()
 
 # spawn the ego car
-len_of_platoon=4
+len_of_platoon=7
 ego_car=[]
 route_ego=[]
 for i in range(len_of_platoon):
