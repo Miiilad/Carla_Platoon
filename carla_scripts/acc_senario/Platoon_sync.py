@@ -4,7 +4,7 @@
 import carla
 import os, sys
 import math
-import time
+import time,random
 
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
@@ -112,7 +112,7 @@ world.tick()
 reference_vehicle_transform = lead_car.vehicle.get_transform()
 
 # spawn the ego car
-len_of_platoon=7
+len_of_platoon=5
 ego_car=[]
 route_ego=[]
 for i in range(len_of_platoon):
@@ -136,6 +136,25 @@ for i in range(len_of_platoon):
 start_point_2 = lead_car.spawn_point
 route_leader = grp.trace_route(start_point_2.location, end_point.location)
 
+# #Adding random traffic to the map
+# # traffic_manager = client.get_trafficmanager(8000)
+# blueprint_library = world.get_blueprint_library()
+# vehicles = blueprint_library.filter('vehicle.*')
+# spawn_points = world.get_map().get_spawn_points()
+# number_of_vehicles=20
+# npc_vehicles = []
+# for i in range(number_of_vehicles):
+#     vehicle_bp = random.choice(vehicles)
+#     spawn_point = random.choice(spawn_points)
+#     try: 
+#         npc_vehicle = world.spawn_actor(vehicle_bp, spawn_point)
+#         npc_vehicles.append(npc_vehicle)
+#     except:
+#         pass
+#     # npc_vehicle.set_autopilot(True)
+
+# for vehicle in npc_vehicles:
+#     vehicle.set_autopilot(True)
 
 # visualize the route for leader
 visualize_waypoint(client, route_leader, sampling_resolution)
@@ -164,13 +183,13 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # >>>>> send data to plotjuggler >>>>>>>>
     # done = lead_car.lp_control_run_step()
     [ego_car[i].update_state(None) for i in range(len_of_platoon)]
-    acceleration_list=[ego_car[i]._acceleration.x for i in range(len_of_platoon)]
+    acceleration_list=[ego_car[i].imu_data.accelerometer.x for i in range(len_of_platoon)]
     acceleration_lead=lead_car._acceleration.x 
 
-
-    data_to_send["custom data"]["acceleration"]["x"] = ego_car[0]._acceleration.x
-    data_to_send["custom data"]["acceleration"]["y"] = ego_car[0]._acceleration.y
-    data_to_send["custom data"]["acceleration"]["z"] = ego_car[0]._acceleration.z
+    for i in range(len_of_platoon):
+        data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
+    # data_to_send["custom data"]["acceleration"]["y"] = ego_car[0]._acceleration.y
+    # data_to_send["custom data"]["acceleration"]["z"] = ego_car[0]._acceleration.z
 
     data_to_send["custom data"]["velocity"]["x"] = ego_car[0]._velocity.x
     data_to_send["custom data"]["velocity"]["y"] = ego_car[0]._velocity.y
