@@ -5,6 +5,7 @@ import carla
 import os, sys
 import math
 import time,random
+import utils.ResTOOL
 
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
