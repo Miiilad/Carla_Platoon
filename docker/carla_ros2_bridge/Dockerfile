@@ -78,6 +78,10 @@ RUN git clone https://github.com/astuff/astuff_sensor_msgs.git
 WORKDIR /home/docker/carla-ros-bridge
 RUN source /opt/ros/galactic/setup.bash && colcon build
 
+#install Gurobi
+RUN python -m pip install gurobipy
+
+
 # Entrypoint will run before any CMD on launch. Sources ~/opt/<ROS_DISTRO>/setup.bash and ~/carla-ros-bridge/devel/setup.bash
 COPY ./ros2_entrypoint.sh /home/docker/ros2_entrypoint.sh
 RUN sudo chmod +x ~/ros2_entrypoint.sh
