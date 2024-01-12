@@ -24,13 +24,18 @@ class Control():
         B = np.array([[0],
                       [0],
                       [-1.59130435]])
+        G=np.array([[0],
+                    [1],
+                    [0]])
         self.Ad = A * h + np.eye(3)
         self.Bd = B * h
+        self.Gd= G * h 
 
         self.x_predict_sequence=[]
 
-    def calculate(self, x, u_lim):
+    def calculate(self, x,v_dot_lead, u_lim):
         self.xp = np.copy(x)
+        self.v_dot_lead=v_dot_lead
 
         #################
         m = gp.Model("qp")
@@ -118,7 +123,7 @@ class Control():
 
     def opt_const_mat(self, m, Xp, Up):
         m.addConstr(Xp[:, 0] == self.xp)
-        m.addConstr(Xp[:, 1:] == self.Ad @ Xp[:, :-1] + self.Bd @ Up[:, :-1])
+        m.addConstr(Xp[:, 1:] == self.Ad @ Xp[:, :-1] + self.Bd @ Up[:, :-1] + self.v_dot_lead* self.Gd @ np.ones((1,self.p_H-1)))
 
 
     def getUp_joined(self, Up):

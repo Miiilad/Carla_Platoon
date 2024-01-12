@@ -114,7 +114,7 @@ world.tick()
 reference_vehicle_transform = lead_car.vehicle.get_transform()
 
 # spawn the ego car
-len_of_platoon=1
+len_of_platoon=3
 ego_car=[]
 route_ego=[]
 for i in range(len_of_platoon):
@@ -169,7 +169,7 @@ for i in range(len_of_platoon):
 lead_car.set_global_plan(route_leader)
 
 # set the speed of the lead car 
-lead_car.set_speed(80)
+lead_car.set_speed(50)
 
 # imu filter and imu data
 use_filter = "simple_low_pass"
@@ -284,7 +284,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         velocity_error = velocity_front_vehicle - ego_car[i]._velocity.x
 
         # target_acceleration[i] = controller_outer[i].unsat_control(distance_error)
-        target_acceleration[i]= Controller_mpc[i].calculate([distance_error,velocity_error,acceleration_list[i]], u_lim)
+        target_acceleration[i]= Controller_mpc[i].calculate([distance_error,velocity_error,acceleration_list[i]], acceleration_front_vehicle, u_lim)
         # print(">>>>",i, target_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
         velocity_front_vehicle = ego_car[i]._velocity.x
@@ -327,7 +327,7 @@ controller_inner=[FeedForward_pid_Controller(kp=100,ki=4,kd=60) for i in range(l
 controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=60) for i in range(len_of_platoon)]
 # To characterise the performance measure
 R = np.diag([1])
-Q = np.diag([1, 1, 1])
+Q = np.diag([3, 1, 1])
 Objective = Objective(Q, R)
 
 # Define the controller
