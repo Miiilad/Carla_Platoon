@@ -14,6 +14,7 @@ class mCar:
         world = client.get_world()
         ego_bp = world.get_blueprint_library().find('vehicle.carlamotors.european_hgv')
         # ego_bp = world.get_blueprint_library().find('vehicle.tesla.model3')
+        # ego_bp = world.get_blueprint_library().find('vehicle.dodge.charger_2020')
         ego_bp.set_attribute('role_name',name)
 
         if spawn_point is None:
@@ -102,7 +103,7 @@ class mCar:
         spectator = self.vehicle.get_world().get_spectator()
         ego_tf = self.get_transform_vec()
         spectator_tf = carla.Transform(ego_tf.location, ego_tf.rotation)
-        spectator_tf.location += ego_tf.get_forward_vector() * (-17)
+        spectator_tf.location += ego_tf.get_forward_vector() * (-30)
         spectator_tf.location += ego_tf.get_up_vector() * 35
 
         # change the pitch angle
