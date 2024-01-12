@@ -7,13 +7,15 @@ from gurobipy import GRB
 
 
 class Control():
-    def __init__(self, h, t_end, prediction_H, control_H, Objective, Model):
+    def __init__(self, h, prediction_H, control_H, Objective):
         self.Objective = Objective
         self.h = h
         self.kf = int(20 / h)
         self.p_H = prediction_H
         self.c_H = control_H
-        self.Model = Model
+        self.dim_m=1
+        self.dim_n=3
+
         self.Objective = Objective
 
         A = np.array([[0, 1, -1.6],
@@ -27,16 +29,16 @@ class Control():
 
         self.x_predict_sequence=[]
 
-    def calculate(self, x, u_lim, k):
+    def calculate(self, x, u_lim):
         self.xp = np.copy(x)
 
         #################
         m = gp.Model("qp")
         # m.params.NonConvex = 2
-        Up = m.addMVar(shape=(self.Model.dim_m, self.c_H), lb=list(u_lim[0]*np.ones((self.Model.dim_m, self.c_H))),
-                       ub=list(u_lim[1]*np.ones((self.Model.dim_m, self.c_H))), name="U")
-        Xp = m.addMVar(shape=(self.Model.dim_n, self.p_H), lb=list(-10 * np.ones((self.Model.dim_n, self.p_H))),
-                       ub=list(5 * np.ones((self.Model.dim_n, self.p_H))), name="Xp")
+        Up = m.addMVar(shape=(self.dim_m, self.c_H), lb=list(u_lim[0]*np.ones((self.dim_m, self.c_H))),
+                       ub=list(u_lim[1]*np.ones((self.dim_m, self.c_H))), name="U")
+        Xp = m.addMVar(shape=(self.dim_n, self.p_H), lb=list(-100 * np.ones((self.dim_n, self.p_H))),
+                       ub=list(100 * np.ones((self.dim_n, self.p_H))), name="Xp")
 
         # This needs to be improved. It won't work for self.Model_m != 1
         # Create the control sequence considering the repeated tail
@@ -81,9 +83,10 @@ class Control():
         # m.write("myLP.lp")
         # print(var)
         var_u = m.getVars()
+        # print(var_u)
         u = np.array(var_u[0].x)
 
-        start_ind=self.c_H * self.Model.dim_m
+        start_ind=self.c_H * self.dim_m
         # for v in m.getVars()[start_ind:start_ind+self.p_H]:
         #     print(f"{v.VarName} = {v.X}")
         x_predict=[v.x for v in m.getVars()[start_ind:start_ind + self.p_H]]
@@ -124,7 +127,7 @@ class Control():
         Up_joined = Up.tolist()[0] + Up_tail
 
         # Reshape and convert back to an MVar
-        Up_joined = np.array(Up_joined).reshape(self.Model.dim_m, self.p_H)
+        Up_joined = np.array(Up_joined).reshape(self.dim_m, self.p_H)
         Up_joined = Up_joined.tolist()
         Up_joined = gp.MVar.fromlist(Up_joined)
 
@@ -154,8 +157,8 @@ class SimResults():
         len_t = len(t)
         self.Model = Model
         self.Ctrl = Ctrl
-        self.x_s_history = np.zeros((self.Model.dim_n, len_t))
-        self.u_history = np.zeros((self.Model.dim_m, len_t))
+        self.x_s_history = np.zeros((self.dim_n, len_t))
+        self.u_history = np.zeros((self.dim_m, len_t))
 
         # the residule of x, attack time
         self.residule = np.zeros(len_t)
@@ -176,9 +179,9 @@ class SimResults():
         # plot the 'control' + 'states' of the system vs. 'time' ################################
         if self.select['states']:
             fig1 = plt.figure()
-            for im in range(self.Model.dim_m):
+            for im in range(self.dim_m):
                 plt.plot(self.t[:i], self.u_history[im, :i], 'c')
-            for ii in range(self.Model.dim_n):
+            for ii in range(self.dim_n):
                 plt.plot(self.t[:i], self.x_s_history[ii, :i],
                          self.pallet[ii % len(self.pallet)])
 
@@ -211,9 +214,9 @@ class SimResults():
 
         # plot the control and the system
         # plot state variable and input
-        for im in range(self.Model.dim_m):
+        for im in range(self.dim_m):
             ax.plot(self.t[:i], self.u_history[im, :i], 'c')
-        for ii in range(self.Model.dim_n):
+        for ii in range(self.dim_n):
             ax.plot(self.t[:i], self.x_s_history[ii, :i],
                     self.pallet[ii % len(self.pallet)])
 
@@ -236,9 +239,9 @@ class SimResults():
 
         # plot the control and the system
         # plot state variable and input
-        for im in range(self.Model.dim_m):
+        for im in range(self.dim_m):
             ax.plot(self.t[:i], self.u_history[im, :i], 'c')
-        for ii in range(self.Model.dim_n):
+        for ii in range(self.dim_n):
             ax.plot(self.t[:i], self.x_s_history[ii, :i],
                     self.pallet[ii % len(self.pallet)])
 
