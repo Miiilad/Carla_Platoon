@@ -277,9 +277,8 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     for i in range(len_of_platoon):
         #Position relative
         distance = ego_car[i]._location.distance(location_front_vehicle)
-        # target_distance_wrt_v= target_distance + 0.5*velocity_front_vehicle
-        distance_error =  target_distance - distance 
-        if i==0: print(distance, target_distance)
+        distance_error =  distance - target_distance 
+        
         #Velocity relative
         velocity_error = velocity_front_vehicle - ego_car[i]._velocity.x
 
@@ -288,7 +287,8 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         # print(">>>>",i, target_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
         velocity_front_vehicle = ego_car[i]._velocity.x
-        acceleation_fron_vehicle = acceleration_list[i]
+        acceleration_front_vehicle = acceleration_list[i]
+    print(target_acceleration)
         
 
     # print(f"distance error: {distance_error}")
@@ -326,8 +326,8 @@ controller_inner=[FeedForward_pid_Controller(kp=100,ki=4,kd=60) for i in range(l
 # controller_inner=[FeedForward_pid_Controller(kp=10,ki=1,kd=60) for i in range(len_of_platoon)]
 controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=60) for i in range(len_of_platoon)]
 # To characterise the performance measure
-R = np.diag([1])
-Q = np.diag([3, 1, 1])
+R = np.diag([50])
+Q = np.diag([10, 1, 0])
 Objective = Objective(Q, R)
 
 # Define the controller
