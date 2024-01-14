@@ -23,13 +23,13 @@ class Control():
                       [0, 0, -2.17391304]])
         B = np.array([[0],
                       [0],
-                      [-1.59130435]])
-        G=np.array([[0],
+                      [1.59130435]])
+        H=np.array([[0],
                     [1],
                     [0]])
         self.Ad = A * h + np.eye(3)
         self.Bd = B * h
-        self.Gd= G * h 
+        self.Hd= H * h 
 
         self.x_predict_sequence=[]
 
@@ -104,7 +104,9 @@ class Control():
         u = np.clip(u, u_lim[0], u_lim[1])
         # print('u',u)
         return u
-
+    def eval_nominal(self,x,u,v_dot_lead):
+        x_next=self.Ad @ x + self.Bd @ u + self.Hd * v_dot_lead
+        return x_next
     def opt_obj(self, Up):
         self.Objective.resetSum()
         for p in range(self.p_H):
@@ -123,7 +125,7 @@ class Control():
 
     def opt_const_mat(self, m, Xp, Up):
         m.addConstr(Xp[:, 0] == self.xp)
-        m.addConstr(Xp[:, 1:] == self.Ad @ Xp[:, :-1] + self.Bd @ Up[:, :-1] + self.v_dot_lead* self.Gd @ np.ones((1,self.p_H-1)))
+        m.addConstr(Xp[:, 1:] == self.Ad @ Xp[:, :-1] + self.Bd @ Up[:, :-1] + self.v_dot_lead* self.Hd @ np.ones((1,self.p_H-1)))
 
 
     def getUp_joined(self, Up):
