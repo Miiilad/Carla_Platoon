@@ -36,7 +36,7 @@ world = client.load_world("Town03_Opt")
 settings = world.get_settings()
 # sychronous mode
 settings.synchronous_mode = True
-fixed_delta_seconds = 1/120 # 200Hz
+fixed_delta_seconds = 1/100 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 # physics 
@@ -114,7 +114,7 @@ world.tick()
 reference_vehicle_transform = lead_car.vehicle.get_transform()
 
 # spawn the ego car
-len_of_platoon=3
+len_of_platoon=1
 ego_car=[]
 route_ego=[]
 for i in range(len_of_platoon):
@@ -190,8 +190,8 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
 
     for i in range(len_of_platoon):
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
-        data_to_send["custom data"]["acceleration"]["target{}:x".format(i)] = target_acceleration[i]
-        # print(i,ego_car[i].imu_data.accelerometer.x,target_acceleration[i])
+        data_to_send["custom data"]["acceleration"]["target{}:x".format(i)] = input_acceleration[i]
+        # print(i,ego_car[i].imu_data.accelerometer.x,input_acceleration[i])
     # data_to_send["custom data"]["acceleration"]["y"] = ego_car[0]._acceleration.y
     # data_to_send["custom data"]["acceleration"]["z"] = ego_car[0]._acceleration.z
 
@@ -222,20 +222,19 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # <<<<<< send data to plotjuggler <<<<<<<<<
     return acceleration_list,acceleration_lead
 
-def inner_control_loop(loop_name="10ms loop", target_distance=10, run_time=None):
-    # target_acceleration = [1]*len_of_platoon
-    # print('>>>',target_acceleration)
+def inner_control_loop(loop_name="10ms loop", target_distance=10):
     for i in range(len_of_platoon):
-        acceleration_error =  target_acceleration[i]-acceleration_list[i]
-        # throttle,brake = controller_inner[i].control(acceleration_error)
-        if target_acceleration[i]>=0:
-            brake=0
-            throttle=target_acceleration[i]
-        else:
-            brake=target_acceleration[i]
-            throttle=0
+        # if input_acceleration[i]>=0:
+        #     brake=0
+        #     throttle=input_acceleration[i]
+        # else:
+        #     brake=input_acceleration[i]
+        #     throttle=0
+        acceleration_error =  input_acceleration[i]-acceleration_list[i]
+        throttle,brake = controller_inner[i].control(acceleration_error)
+        print(brake)
         done = ego_car[i].lp_control_run_step(brake = brake, throttle=throttle)
-        target_location = ego_car[i].vehicle.get_transform().location
+        # target_location = ego_car[i].vehicle.get_transform().location
 
     # print(f"distance error: {distance_error}")
     data_to_send["custom data"]["throttle"] = throttle
@@ -246,26 +245,6 @@ def inner_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
 
     return done
 
-    # done = lead_car.lp_control_run_step()
-    # # world.tick()
-    # target_location = lead_car.vehicle.get_transform().location
-    
-    # for i in range(len_of_platoon):
-    #     distance = ego_car[i]._location.distance(target_location)
-    #     distance_error =  distance- target_distance
-    #     throttle,brake = controller[i].control(distance_error)
-    #     done = ego_car[i].lp_control_run_step(brake = brake, throttle=throttle)
-    #     target_location = ego_car[i].vehicle.get_transform().location
-
-    # # print(f"distance error: {distance_error}")
-    # data_to_send["custom data"]["throttle"] = throttle
-    # data_to_send["custom data"]["target_dist"] = target_distance
-    # data_to_send["custom data"]["distance"] = distance
-    # data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
-    # data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
-
-    # return done
-
 def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None):
 
 
@@ -273,22 +252,22 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     location_front_vehicle = lead_car.vehicle.get_transform().location
     velocity_front_vehicle = lead_car._velocity.x
     acceleration_front_vehicle = acceleration_lead
+    distance_error_list=[0,0,0]
     
     for i in range(len_of_platoon):
         #Position relative
         distance = ego_car[i]._location.distance(location_front_vehicle)
         distance_error =  distance - target_distance 
+        distance_error_list [i]= distance_error
         
         #Velocity relative
         velocity_error = velocity_front_vehicle - ego_car[i]._velocity.x
-
-        # target_acceleration[i] = controller_outer[i].unsat_control(distance_error)
-        target_acceleration[i]= Controller_mpc[i].calculate([distance_error,velocity_error,acceleration_list[i]], acceleration_front_vehicle, u_lim)
-        # print(">>>>",i, target_acceleration[i])
+        x = [distance_error,velocity_error,acceleration_list[i]]
+        input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle, u_lim)
+        # print(">>>>",i, input_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
         velocity_front_vehicle = ego_car[i]._velocity.x
         acceleration_front_vehicle = acceleration_list[i]
-    print(target_acceleration)
         
 
     # print(f"distance error: {distance_error}")
@@ -298,7 +277,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
     data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
 
-    return done, target_acceleration
+    return done, input_acceleration
 
 
 def loop_20ms_loop(loop_name="20ms loop"):
@@ -322,23 +301,23 @@ target_dist = 0
 
 #For Longitudinal control
 controller=[FeedForward_pid_Controller(kp=5,ki=0,kd=50) for i in range(len_of_platoon)]
-controller_inner=[FeedForward_pid_Controller(kp=100,ki=4,kd=60) for i in range(len_of_platoon)]
+controller_inner=[FeedForward_pid_Controller(kp=100,ki=10,kd=60) for i in range(len_of_platoon)]
 # controller_inner=[FeedForward_pid_Controller(kp=10,ki=1,kd=60) for i in range(len_of_platoon)]
 controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=60) for i in range(len_of_platoon)]
 # To characterise the performance measure
-R = np.diag([50])
+R = np.diag([5])
 Q = np.diag([10, 1, 0])
 Objective = Objective(Q, R)
 
 # Define the controller
-h=0.1
+h=0.05
 prediction_H = 10
 control_H = 5
-u_lim= [-1,1]
+u_lim= [-70,70]
 Controller_mpc = [Control(h, prediction_H, control_H, Objective) for i in range(len_of_platoon)]
 acceleration_list=[0]*len_of_platoon
 acceleration_lead=0
-target_acceleration=[0]*len_of_platoon
+input_acceleration=[0]*len_of_platoon
 
 done = False
 count = 0   
@@ -357,21 +336,21 @@ while True:
 
 
     # >>>>>>>>>>>>>>>>>> run the loop >>>>>>>>>>>>>>>>>>
-    if run_time - record_5ms > 0.005:
+    if run_time - record_5ms >= 0.005:
         acceleration_list,accleration_lead=loop_5ms_loop(run_time=run_time)
         record_5ms = run_time
 
-    if run_time - record_inner > 0.01:
+    if run_time - record_inner >= 0.01:
         # inner loop for speed control
-        done = inner_control_loop(target_distance=target_dist, run_time=run_time)
+        done = inner_control_loop(target_distance=target_dist)
         record_inner = run_time
     
-    if run_time - record_outer > 0.1:
-        # inner loop for speed control
-        done,target_acceleration = outer_control_loop(target_distance=target_dist, run_time=run_time)
+    if run_time - record_outer >= 0.05:
+        # loop for speed control
+        done,input_acceleration = outer_control_loop(target_distance=target_dist, run_time=run_time)
         record_outer = run_time
     
-    if run_time - record_20ms > 0.2:
+    if run_time - record_20ms >= 0.2:
         # outer loop for MPC
         target_dist = loop_20ms_loop()
         record_20ms = run_time

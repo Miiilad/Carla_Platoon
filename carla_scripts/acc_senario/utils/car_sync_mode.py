@@ -13,8 +13,9 @@ class mCar:
     def __init__(self, client, spawn_point=None, name = "ego_car"):
         # spawn ego car
         world = client.get_world()
-        ego_bp = world.get_blueprint_library().find('vehicle.carlamotors.european_hgv')
+        # ego_bp = world.get_blueprint_library().find('vehicle.carlamotors.european_hgv')
         # ego_bp = world.get_blueprint_library().find('vehicle.tesla.model3')
+        ego_bp = world.get_blueprint_library().find('vehicle.dodge.charger_2020')
         # car_select=random.choice(['vehicle.carlamotors.european_hgv','vehicle.tesla.model3','vehicle.dodge.charger_2020'])
         # ego_bp = world.get_blueprint_library().find(car_select)
         ego_bp.set_attribute('role_name',name)
