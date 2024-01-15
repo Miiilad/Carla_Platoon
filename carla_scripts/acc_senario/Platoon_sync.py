@@ -19,6 +19,7 @@ from utils.visualizer import visualize_waypoint
 from utils.udp_server import send_custom_data
 from utils.controller import FeedForward_pid_Controller
 from utils.filter import CarlaIMULowPassFilter
+from utils.neural_learner import MyNeuralNetwork
 
 # neural network
 network_path = os.path.join(current_path,"../neural")
@@ -331,6 +332,10 @@ data_collected_output = []
 x_list_previous = []
 
 
+# Initialize and train the network
+net = MyNeuralNetwork()
+net.train_network()
+
 done = False
 count = 0   
 while True:
@@ -374,11 +379,6 @@ while True:
                 else:
                     print(i,'th: TOO CLOSE!')
 
-        input_data = torch.tensor(data_collected_input)
-        output_data = torch.tensor(data_collected_output)
-        # Save data (optional)
-        # torch.save(input_data, 'input_data.pt')
-        # torch.save(output_data, 'output_data.pt')
                     
         x_list_previous = x_list
         u_implemented = input_acceleration
@@ -420,7 +420,12 @@ while True:
     # <<<<< if running just for visualization <<<<<<<<<<
 
 
-    if run_time > 200 or done:
+    if run_time > 10 or done:
+        # Save data (optional)
+        
+        net.save_data(data_collected_input,data_collected_output)
+        # torch.save(input_data, 'input_data.pt'.format())
+        # torch.save(output_data, 'output_data.pt'.format())
         # end the thread
         break
 
