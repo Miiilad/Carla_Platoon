@@ -105,7 +105,8 @@ class Control():
         # print('u',u)
         return u
     def eval_nominal(self,x,u,v_dot_lead):
-        x_next=self.Ad @ x + self.Bd @ u + self.Hd * v_dot_lead
+        x=np.array(x)
+        x_next=self.Ad @ x + (self.Bd * u + self.Hd * v_dot_lead).flatten()
         return x_next
     def opt_obj(self, Up):
         self.Objective.resetSum()

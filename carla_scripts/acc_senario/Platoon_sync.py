@@ -7,6 +7,7 @@ import math
 import time,random
 from utils.ResTOOL import Control,Objective
 import numpy as np
+import torch
 
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
@@ -114,7 +115,7 @@ world.tick()
 reference_vehicle_transform = lead_car.vehicle.get_transform()
 
 # spawn the ego car
-len_of_platoon=1
+len_of_platoon=2
 ego_car=[]
 route_ego=[]
 for i in range(len_of_platoon):
@@ -184,13 +185,10 @@ elif use_filter == "kalman":
 def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # >>>>> send data to plotjuggler >>>>>>>>
     # done = lead_car.lp_control_run_step()
-    [ego_car[i].update_state(None) for i in range(len_of_platoon)]
-    acceleration_list=[ego_car[i].imu_data.accelerometer.x for i in range(len_of_platoon)]
-    acceleration_lead=lead_car.imu_data.accelerometer.x
+
 
     for i in range(len_of_platoon):
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
-        data_to_send["custom data"]["acceleration"]["target{}:x".format(i)] = input_acceleration[i]
         # print(i,ego_car[i].imu_data.accelerometer.x,input_acceleration[i])
     # data_to_send["custom data"]["acceleration"]["y"] = ego_car[0]._acceleration.y
     # data_to_send["custom data"]["acceleration"]["z"] = ego_car[0]._acceleration.z
@@ -220,6 +218,9 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     data_to_send["custom data"]["filtered"]["gyro"]["y"] = imu_data[4]
     data_to_send["custom data"]["filtered"]["gyro"]["z"] = imu_data[5]
     # <<<<<< send data to plotjuggler <<<<<<<<<
+    [ego_car[i].update_state(None) for i in range(len_of_platoon)]
+    acceleration_list=[ego_car[i].imu_data.accelerometer.x for i in range(len_of_platoon)]
+    acceleration_lead=lead_car.imu_data.accelerometer.x
     return acceleration_list,acceleration_lead
 
 def inner_control_loop(loop_name="10ms loop", target_distance=10):
@@ -232,7 +233,6 @@ def inner_control_loop(loop_name="10ms loop", target_distance=10):
         #     throttle=0
         acceleration_error =  input_acceleration[i]-acceleration_list[i]
         throttle,brake = controller_inner[i].control(acceleration_error)
-        print(brake)
         done = ego_car[i].lp_control_run_step(brake = brake, throttle=throttle)
         # target_location = ego_car[i].vehicle.get_transform().location
 
@@ -252,18 +252,24 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     location_front_vehicle = lead_car.vehicle.get_transform().location
     velocity_front_vehicle = lead_car._velocity.x
     acceleration_front_vehicle = acceleration_lead
-    distance_error_list=[0,0,0]
+    x_next_prediction_list=[]
+    x_list=[]
+    
     
     for i in range(len_of_platoon):
         #Position relative
         distance = ego_car[i]._location.distance(location_front_vehicle)
         distance_error =  distance - target_distance 
-        distance_error_list [i]= distance_error
         
         #Velocity relative
         velocity_error = velocity_front_vehicle - ego_car[i]._velocity.x
-        x = [distance_error,velocity_error,acceleration_list[i]]
+        x = np.array([distance_error,velocity_error,acceleration_list[i]])
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle, u_lim)
+
+        #Record samples for learning
+        x_list.append(x)
+        x_next_prediction_list.append(Controller_mpc[i].eval_nominal(x, input_acceleration[i],acceleration_front_vehicle))
+        
         # print(">>>>",i, input_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
         velocity_front_vehicle = ego_car[i]._velocity.x
@@ -271,13 +277,15 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         
 
     # print(f"distance error: {distance_error}")
+    for i in range(len_of_platoon):
+        data_to_send["custom data"]["acceleration"]["target{}:x".format(i)] = input_acceleration[i]
     data_to_send["custom data"]["throttle"] = throttle
     data_to_send["custom data"]["target_dist"] = target_distance
     data_to_send["custom data"]["distance"] = distance
     data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
     data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
 
-    return done, input_acceleration
+    return done, input_acceleration, x_list, x_next_prediction_list
 
 
 def loop_20ms_loop(loop_name="20ms loop"):
@@ -318,6 +326,10 @@ Controller_mpc = [Control(h, prediction_H, control_H, Objective) for i in range(
 acceleration_list=[0]*len_of_platoon
 acceleration_lead=0
 input_acceleration=[0]*len_of_platoon
+data_collected_input = []
+data_collected_output = []
+x_list_previous = []
+
 
 done = False
 count = 0   
@@ -336,24 +348,53 @@ while True:
 
 
     # >>>>>>>>>>>>>>>>>> run the loop >>>>>>>>>>>>>>>>>>
-    if run_time - record_5ms >= 0.005:
+    if run_time - record_5ms >= 0.01:
         acceleration_list,accleration_lead=loop_5ms_loop(run_time=run_time)
         record_5ms = run_time
+    
+    if run_time - record_20ms >= 0.2:
+        # outer loop for MPC
+        target_dist = loop_20ms_loop()
+        record_20ms = run_time
+
+
+    if run_time - record_outer >= 0.05:
+        # loop for speed control
+        done,input_acceleration, x_list, x_next_prediction_list = outer_control_loop(target_distance=target_dist, run_time=run_time)
+
+        x_observed=x_list
+        if len(x_list_previous) > 0:
+            for i in range(len_of_platoon):
+                if x_list_previous[i][0] > (10-target_dist):
+                    input = np.append(x_list_previous[i],u_implemented[i])
+                    output= x_observed[i] - x_prediction[i]
+                    print(output)
+                    data_collected_input.append(input)
+                    data_collected_output.append(output)
+                else:
+                    print(i,'th: TOO CLOSE!')
+
+        input_data = torch.tensor(data_collected_input)
+        output_data = torch.tensor(data_collected_output)
+        # Save data (optional)
+        # torch.save(input_data, 'input_data.pt')
+        # torch.save(output_data, 'output_data.pt')
+                    
+        x_list_previous = x_list
+        u_implemented = input_acceleration
+        x_prediction = x_next_prediction_list 
+
+        record_outer = run_time
+
 
     if run_time - record_inner >= 0.01:
         # inner loop for speed control
         done = inner_control_loop(target_distance=target_dist)
         record_inner = run_time
     
-    if run_time - record_outer >= 0.05:
-        # loop for speed control
-        done,input_acceleration = outer_control_loop(target_distance=target_dist, run_time=run_time)
-        record_outer = run_time
-    
-    if run_time - record_20ms >= 0.2:
-        # outer loop for MPC
-        target_dist = loop_20ms_loop()
-        record_20ms = run_time
+
+
+
     
     # check if local planner reach the end
     # print(f"run time: {run_time}")
@@ -374,8 +415,8 @@ while True:
     # make it more real to the real time
     duration = time.time() - record_start_time
     scale=1
-    if duration < (fixed_delta_seconds*scale):
-        time.sleep((fixed_delta_seconds *scale)- duration)
+    # if duration < (fixed_delta_seconds*scale):
+    #     time.sleep((fixed_delta_seconds *scale)- duration)
     # <<<<< if running just for visualization <<<<<<<<<<
 
 
