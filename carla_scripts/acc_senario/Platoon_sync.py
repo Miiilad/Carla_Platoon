@@ -424,6 +424,8 @@ while True:
         # end the thread
         break
 
-ego_car[0].destroy()
+for i in range(len_of_platoon):
+    ego_car[i].destroy()
+lead_car.destroy()
 
 world.tick() # to make sure the client receives the last data, and the vehicle is destroyed before the client
