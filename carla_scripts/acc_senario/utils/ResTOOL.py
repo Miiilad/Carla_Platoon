@@ -89,20 +89,25 @@ class Control():
         # print(var)
         var_u = m.getVars()
         # print(var_u)
-        u = np.array(var_u[0].x)
+        try:
+            u = np.array(var_u[0].x)
+        except:
+            u = self.u_pre
+            print("WARNING!!! >>>> MPC infeasible <<<<<")
 
-        start_ind=self.c_H * self.dim_m
-        # for v in m.getVars()[start_ind:start_ind+self.p_H]:
-        #     print(f"{v.VarName} = {v.X}")
-        x_predict=[v.x for v in m.getVars()[start_ind:start_ind + self.p_H]]
-        # print(x_predict)
-        self.x_predict_sequence=x_predict[1:]
+        # start_ind=self.c_H * self.dim_m
+        # # for v in m.getVars()[start_ind:start_ind+self.p_H]:
+        # #     print(f"{v.VarName} = {v.X}")
+        # x_predict=[v.x for v in m.getVars()[start_ind:start_ind + self.p_H]]
+        # # print(x_predict)
+        # self.x_predict_sequence=x_predict[1:]
 
 
         ####################
 
         u = np.clip(u, u_lim[0], u_lim[1])
         # print('u',u)
+        self.u_pre = u
         return u
     def eval_nominal(self,x,u,v_dot_lead):
         x=np.array(x)
