@@ -7,7 +7,7 @@ import math
 import time,random
 from utils.ResTOOL import Control,Objective
 import numpy as np
-import torch
+
 
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
@@ -116,7 +116,7 @@ world.tick()
 reference_vehicle_transform = lead_car.vehicle.get_transform()
 
 # spawn the ego car
-len_of_platoon=2
+len_of_platoon=6
 ego_car=[]
 route_ego=[]
 for i in range(len_of_platoon):
@@ -335,6 +335,9 @@ x_list_previous = []
 # Initialize and train the network
 net = MyNeuralNetwork()
 net.train_network()
+net.save_model()
+net.load_model()
+stop
 
 done = False
 count = 0   
@@ -420,7 +423,7 @@ while True:
     # <<<<< if running just for visualization <<<<<<<<<<
 
 
-    if run_time > 10 or done:
+    if run_time > 30 or done:
         # Save data (optional)
         
         net.save_data(data_collected_input,data_collected_output)
