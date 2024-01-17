@@ -49,7 +49,7 @@ world.apply_settings(settings)
 
 spawn_points = world.get_map().get_spawn_points()
 spawn_point = random.choice(spawn_points)
-# spawn_point = spawn_points[90]
+spawn_point = spawn_points[90]
 # get the map
 town_map = world.get_map()
 roads = town_map.get_topology()
@@ -274,11 +274,12 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         velocity_error = velocity_front_vehicle - ego_car[i]._velocity.x
         x = np.array([distance_error,velocity_error,acceleration_list[i]])
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle, u_lim)
-        print("Car",i," NN:",net.evaluate(x,input_acceleration[i]))
 
         #Record samples for learning
         x_list.append(x)
         x_next_prediction_list.append(Controller_mpc[i].eval_nominal(x, input_acceleration[i],acceleration_front_vehicle))
+        input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x,input_acceleration[i],acceleration_front_vehicle,u_lim)
+        print(input_acceleration[i],type(input_acceleration[i]))
         
         # print(">>>>",i, input_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
@@ -344,8 +345,8 @@ x_list_previous = []
 
 # Initialize and train the network
 net = MyNeuralNetwork()
-net.load_model()
-# net.train_network()
+# net.load_model()
+net.train_network()
 # net.save_model()
 
 

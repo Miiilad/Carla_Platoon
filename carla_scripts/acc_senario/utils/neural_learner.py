@@ -13,10 +13,12 @@ class MyNeuralNetwork(nn.Module):
         # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
         # n = 3  # example value for n
         # nh = 10  # example value for nh
+        nh1=50
+        nh2=25
         super(MyNeuralNetwork, self).__init__()
-        self.layer1 = nn.Linear(n + 1, nh)
-        self.layer2 = nn.Linear(nh, nh)
-        self.output_layer = nn.Linear(nh, n)
+        self.layer1 = nn.Linear(n + 1, nh1)
+        self.layer2 = nn.Linear(nh1, nh2)
+        self.output_layer = nn.Linear(nh2, n)
         self.elu = nn.ELU()
 
         # Initialize optimizer and loss function here, if they are fixed
@@ -133,18 +135,37 @@ class MyNeuralNetwork(nn.Module):
             Tensor: The partial derivative of the network with respect to u at (x, 0).
         """
         # Ensure x requires gradient
+        x=x.astype(np.float32)
+        x=torch.from_numpy(x)
         x = x.requires_grad_(True)
 
+
+
+        u=torch.tensor([[0.0]], requires_grad=True)
+
         # Create a tensor for u, initialized to zero and requires gradient
-        u = torch.zeros_like(x, requires_grad=True)
+        # u = torch.zeros_like(x, requires_grad=True)
 
         # Forward pass
         y = self.forward(x, u)
 
-        # Compute gradients of y with respect to u
-        grad_u = torch.autograd.grad(outputs=y, inputs=u, grad_outputs=torch.ones_like(y), create_graph=True)[0]
+        # Initialize container for gradients
+        grad_u = torch.zeros_like(y)
 
-        return grad_u
+        # Compute gradients for each component of y
+        for i in range(y.shape[1]):
+            # Select the i-th component of y
+            y_component = y[:, i]
+
+            # Compute gradient with respect to u
+            grad_component = torch.autograd.grad(outputs=y_component, inputs=u, 
+                                                 grad_outputs=torch.ones_like(y_component), 
+                                                 retain_graph=True, create_graph=True)[0]
+
+            # Store the computed gradient
+            grad_u[:, i] = grad_component.squeeze()
+
+        return grad_u.detach().numpy().T, y.detach().numpy().T
     
 
     def evaluate(self,x,u):
@@ -154,6 +175,6 @@ class MyNeuralNetwork(nn.Module):
         out=self(torch.from_numpy(x),scalar_tensor.unsqueeze(0))
         
 
-        return out
+        return out.detach().numpy().T
 
         

@@ -146,6 +146,59 @@ class Control():
         Up_joined = gp.MVar.fromlist(Up_joined)
 
         return Up_joined
+    
+    def Safe_Control(self,net,x,u,v_dot_lead,u_lim):
+        m = gp.Model("qp")
+        # m.params.NonConvex = 2
+        Us = m.addMVar(shape=(self.dim_m, self.dim_m), lb=list(u_lim[0]*np.ones((self.dim_m, self.dim_m))),
+                       ub=list(u_lim[1]*np.ones((self.dim_m, self.dim_m))), name="U")
+        
+        # Define the objective function
+        objective = (u - Us) * (u - Us)
+        m.Params.LogToConsole = 0
+        m.Params.FeasibilityTol = 1e-3
+        m.setObjective(objective, GRB.MINIMIZE)
+        etta = 0.2
+
+        y=net.evaluate(x,u)
+        bx,ax = net.partial_derivative_u(x)
+        # print(" NN:",y)
+        # print("Gradient:", bx,ax)
+        # print("a(x)+b(x)u:", ax+bx*u,'\n')
+
+        f_bar = self.eval_nominal(x,u,v_dot_lead)
+        f_bar=np.array(f_bar).reshape(self.dim_n,1)
+        Bx=self.BF(x)
+        Bx_next=self.BF(f_bar+ ax+bx @ Us)
+
+        m.addConstr(Bx_next -Bx >= -etta * Bx, "constraint")
+
+        try:
+            # Solve the model
+            m.optimize()
+
+            # Get the optimal value of Us
+            optimal_Us = Us.X
+            print("Unsafe control",u,"Optimal value of U safe:", optimal_Us)
+            out=optimal_Us.reshape(self.dim_m)[0]
+        except:
+            print("Unsafe control",u,"safe control is infeasibe!")
+            out=u
+        return out
+
+
+    def BF(self,x):
+        W=np.diag([1,0,0.1])
+        C=6
+        if isinstance(x, np.ndarray):
+            out = C**2 - x.T @ W @ x  
+        else:
+            # Compute the quadratic expression manually
+            quad_expr = gp.quicksum(W[i][i] * x[i] * x[i] for i in range(self.dim_n))
+
+            # Define the complete expression
+            out = C**2 - quad_expr  # Assuming C is a constant 
+        return out
 
 
 class Objective():
