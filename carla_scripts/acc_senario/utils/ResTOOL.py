@@ -32,6 +32,7 @@ class Control():
         self.Hd= H * h 
 
         self.x_predict_sequence=[]
+        self.u_pre = 0.0
 
     def calculate(self, x,v_dot_lead, u_lim):
         self.xp = np.copy(x)

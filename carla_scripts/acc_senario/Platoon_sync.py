@@ -27,8 +27,8 @@ sys.path.append(network_path)
 
 client = carla.Client('carla_server', 2000)
 world = client.get_world()
-# world = client.load_world("Town04_Opt")
-world = client.load_world("Town03_Opt")
+world = client.load_world("Town04_Opt")
+# world = client.load_world("Town03_Opt")
 
 # set for the fixed simulation step ref: https://carla.readthedocs.io/en/latest/adv_synchrony_timestep/#fixed-time-step
 # settings = world.get_settings()
@@ -48,7 +48,8 @@ settings.max_substeps = 10
 world.apply_settings(settings)
 
 spawn_points = world.get_map().get_spawn_points()
-spawn_point = spawn_points[20]
+spawn_point = random.choice(spawn_points)
+# spawn_point = spawn_points[90]
 # get the map
 town_map = world.get_map()
 roads = town_map.get_topology()
@@ -116,7 +117,7 @@ world.tick()
 reference_vehicle_transform = lead_car.vehicle.get_transform()
 
 # spawn the ego car
-len_of_platoon=6
+len_of_platoon=1
 ego_car=[]
 route_ego=[]
 for i in range(len_of_platoon):
@@ -177,7 +178,7 @@ lead_car.set_speed(50)
 use_filter = "simple_low_pass"
 
 if use_filter == "simple_low_pass":
-    imu_filter = CarlaIMULowPassFilter(0.8)
+    imu_filter = CarlaIMULowPassFilter(0.5)
     imu_data = [0 for _ in range(6)]
 elif use_filter == "kalman":
     pass
@@ -188,8 +189,6 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # done = lead_car.lp_control_run_step()
 
 
-    for i in range(len_of_platoon):
-        data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
         # print(i,ego_car[i].imu_data.accelerometer.x,input_acceleration[i])
     # data_to_send["custom data"]["acceleration"]["y"] = ego_car[0]._acceleration.y
     # data_to_send["custom data"]["acceleration"]["z"] = ego_car[0]._acceleration.z
@@ -222,7 +221,16 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     [ego_car[i].update_state(None) for i in range(len_of_platoon)]
     acceleration_list=[ego_car[i].imu_data.accelerometer.x for i in range(len_of_platoon)]
     acceleration_lead=lead_car.imu_data.accelerometer.x
+
+
+    
+    for i in range(len_of_platoon):
+        data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
+
+
     return acceleration_list,acceleration_lead
+
+  
 
 def inner_control_loop(loop_name="10ms loop", target_distance=10):
     for i in range(len_of_platoon):
@@ -266,6 +274,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         velocity_error = velocity_front_vehicle - ego_car[i]._velocity.x
         x = np.array([distance_error,velocity_error,acceleration_list[i]])
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle, u_lim)
+        print("Car",i," NN:",net.evaluate(x,input_acceleration[i]))
 
         #Record samples for learning
         x_list.append(x)
@@ -309,10 +318,11 @@ target_vel = 0
 target_dist = 0
 
 #For Longitudinal control
-controller=[FeedForward_pid_Controller(kp=5,ki=0,kd=50) for i in range(len_of_platoon)]
+# controller=[FeedForward_pid_Controller(kp=5,ki=0,kd=50) for i in range(len_of_platoon)]
 controller_inner=[FeedForward_pid_Controller(kp=100,ki=10,kd=60) for i in range(len_of_platoon)]
 # controller_inner=[FeedForward_pid_Controller(kp=10,ki=1,kd=60) for i in range(len_of_platoon)]
-controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=60) for i in range(len_of_platoon)]
+# controller_inner=[FeedForward_pid_Controller(kp=100,ki=0.1,kd=1) for i in range(len_of_platoon)]
+# controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=60) for i in range(len_of_platoon)]
 # To characterise the performance measure
 R = np.diag([5])
 Q = np.diag([10, 1, 0])
@@ -334,10 +344,10 @@ x_list_previous = []
 
 # Initialize and train the network
 net = MyNeuralNetwork()
-net.train_network()
-net.save_model()
 net.load_model()
-stop
+# net.train_network()
+# net.save_model()
+
 
 done = False
 count = 0   
@@ -369,6 +379,8 @@ while True:
     if run_time - record_outer >= 0.05:
         # loop for speed control
         done,input_acceleration, x_list, x_next_prediction_list = outer_control_loop(target_distance=target_dist, run_time=run_time)
+        if run_time<2:
+            input_acceleration=[50]*len_of_platoon
 
         x_observed=x_list
         if len(x_list_previous) > 0:
@@ -376,7 +388,6 @@ while True:
                 if x_list_previous[i][0] > (10-target_dist):
                     input = np.append(x_list_previous[i],u_implemented[i])
                     output= x_observed[i] - x_prediction[i]
-                    print(output)
                     data_collected_input.append(input)
                     data_collected_output.append(output)
                 else:
@@ -423,7 +434,7 @@ while True:
     # <<<<< if running just for visualization <<<<<<<<<<
 
 
-    if run_time > 30 or done:
+    if run_time > 100 or done:
         # Save data (optional)
         
         net.save_data(data_collected_input,data_collected_output)
