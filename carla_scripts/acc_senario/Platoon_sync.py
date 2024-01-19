@@ -43,7 +43,7 @@ fixed_delta_seconds = 1/100 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 1,'save_data':1, 'load_model':1, 'train_model': 1, 'save_model':1,'run_simulation': 0,  'random_spawn':0}
+setting={"CBF" : 0,'save_data':0, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':0}
 
 # Initialize and train the network
 net = MyNeuralNetwork()
@@ -257,6 +257,7 @@ def inner_control_loop(loop_name="10ms loop", target_distance=10):
 
     # print(f"distance error: {distance_error}")
     data_to_send["custom data"]["throttle"] = throttle
+    data_to_send["custom data"]["brake"] = brake
     data_to_send["custom data"]["target_dist"] = target_distance
     # data_to_send["custom data"]["distance"] = distance
     data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
