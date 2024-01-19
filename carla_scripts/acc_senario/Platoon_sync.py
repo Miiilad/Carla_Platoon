@@ -304,7 +304,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         data_to_send["custom data"]["acceleration"]["target{}:x".format(i)] = input_acceleration[i]
     data_to_send["custom data"]["throttle"] = throttle
     data_to_send["custom data"]["target_dist"] = target_distance
-    data_to_send["custom data"]["distance"] = distance
+    data_to_send["custom data"]["distance_error"] = distance_error
     data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
     data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
 
