@@ -25,6 +25,7 @@ from utils.neural_learner import MyNeuralNetwork
 network_path = os.path.join(current_path,"../neural")
 sys.path.append(network_path)
 
+
 client = carla.Client('carla_server', 2000)
 world = client.get_world()
 world = client.load_world("Town04_Opt")
@@ -41,6 +42,15 @@ settings.synchronous_mode = True
 fixed_delta_seconds = 1/100 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
+
+setting={"CBF" : 1,'save_data':1, 'load_model':1, 'train_model': 1, 'save_model':1,'run_simulation': 0,  'random_spawn':0}
+
+# Initialize and train the network
+net = MyNeuralNetwork()
+if setting["load_model"]:net.load_model()
+if setting["train_model"]:net.train_network()
+if setting["save_model"]: net.save_model()
+if not setting["run_simulation"]: sys.exit("Done")
 # physics 
 settings.substepping = True
 settings.max_substep_delta_time = 0.05
@@ -48,8 +58,8 @@ settings.max_substeps = 10
 world.apply_settings(settings)
 
 spawn_points = world.get_map().get_spawn_points()
-spawn_point = random.choice(spawn_points)
-spawn_point = spawn_points[90]
+if setting["random_spawn"]:spawn_point = random.choice(spawn_points)
+else:spawn_point = spawn_points[90]
 # get the map
 town_map = world.get_map()
 roads = town_map.get_topology()
@@ -278,8 +288,9 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         #Record samples for learning
         x_list.append(x)
         x_next_prediction_list.append(Controller_mpc[i].eval_nominal(x, input_acceleration[i],acceleration_front_vehicle))
-        input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x,input_acceleration[i],acceleration_front_vehicle,u_lim)
-        print(input_acceleration[i],type(input_acceleration[i]))
+
+        #Calculate the safe control through optimization
+        if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x,input_acceleration[i],acceleration_front_vehicle,u_lim)
         
         # print(">>>>",i, input_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
@@ -343,11 +354,6 @@ data_collected_output = []
 x_list_previous = []
 
 
-# Initialize and train the network
-net = MyNeuralNetwork()
-# net.load_model()
-net.train_network()
-# net.save_model()
 
 
 done = False
@@ -386,11 +392,13 @@ while True:
         x_observed=x_list
         if len(x_list_previous) > 0:
             for i in range(len_of_platoon):
-                if x_list_previous[i][0] > (10-target_dist):
+                safe_distance_for_data=7
+                if x_list_previous[i][0] > (safe_distance_for_data-target_dist):
                     input = np.append(x_list_previous[i],u_implemented[i])
                     output= x_observed[i] - x_prediction[i]
                     data_collected_input.append(input)
                     data_collected_output.append(output)
+                    print(input)
                 else:
                     print(i,'th: TOO CLOSE!')
 
@@ -438,7 +446,7 @@ while True:
     if run_time > 100 or done:
         # Save data (optional)
         
-        net.save_data(data_collected_input,data_collected_output)
+        if setting["save_data"]:net.save_data(data_collected_input,data_collected_output)
         # torch.save(input_data, 'input_data.pt'.format())
         # torch.save(output_data, 'output_data.pt'.format())
         # end the thread
