@@ -43,7 +43,7 @@ fixed_delta_seconds = 1/100 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 0,'save_data':1, 'load_model':0, 'train_model': 1, 'save_model':1,'run_simulation': 1,  'random_spawn':1}
+setting={"CBF" : 0,'save_data':0, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':1}
 
 # Initialize and train the network
 net = MyNeuralNetwork()
@@ -260,8 +260,8 @@ def inner_control_loop(loop_name="10ms loop", target_distance=10):
     data_to_send["custom data"]["brake"] = brake
     data_to_send["custom data"]["target_dist"] = target_distance
     # data_to_send["custom data"]["distance"] = distance
-    data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
-    data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
+    data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
+    data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0].get_speed()
 
     return done
 
@@ -270,7 +270,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
 
     # world.tick()
     location_front_vehicle = lead_car.vehicle.get_transform().location
-    velocity_front_vehicle = lead_car._velocity.x
+    velocity_front_vehicle = lead_car.get_speed()
     acceleration_front_vehicle = acceleration_lead
     x_next_prediction_list=[]
     x_list=[]
@@ -282,7 +282,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         distance_error =  distance - target_distance 
         
         #Velocity relative
-        velocity_error = velocity_front_vehicle - ego_car[i]._velocity.x
+        velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
         x = np.array([distance_error,velocity_error,acceleration_list[i]])
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle, u_lim)
 
@@ -296,18 +296,17 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         
         # print(">>>>",i, input_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
-        velocity_front_vehicle = ego_car[i]._velocity.x
+        velocity_front_vehicle = ego_car[i].get_speed()
         acceleration_front_vehicle = acceleration_list[i]
         
 
     # print(f"distance error: {distance_error}")
     for i in range(len_of_platoon):
         data_to_send["custom data"]["acceleration"]["target{}:x".format(i)] = input_acceleration[i]
-    data_to_send["custom data"]["throttle"] = throttle
     data_to_send["custom data"]["target_dist"] = target_distance
     data_to_send["custom data"]["distance_error"] = distance_error
-    data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
-    data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
+    data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
+    data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0].get_speed()
 
     return done, input_acceleration, x_list, x_next_prediction_list,x_next_prediction_net
 
