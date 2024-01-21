@@ -65,6 +65,15 @@ class FeedForward_pid_Controller:
             throttle = 0
             brake = saturate(-value) 
         return throttle, brake
+    def control_demix(self, input):
+        value = input
+        if value>=0:
+            throttle = saturate(value).item()
+            brake = 0.
+        else:
+            throttle = 0.
+            brake = saturate(-value).item()
+        return throttle, brake
     
     def unsat_control(self, input):
         # pid

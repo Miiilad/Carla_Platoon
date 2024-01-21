@@ -9,7 +9,7 @@ import numpy as np
 # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
 
 class MyNeuralNetwork(nn.Module):
-    def __init__(self,n=3,nh=10):
+    def __init__(self,n=2,path="./data/"):
         # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
         # n = 3  # example value for n
         # nh = 10  # example value for nh
@@ -28,7 +28,7 @@ class MyNeuralNetwork(nn.Module):
         #Data saver class instances
         #Data saver class 
         self.filename="input-output"
-        self.path="./data/"
+        self.path=path
         self.DataSaver_io= DataSaver(self.path,self.filename)
 
     def forward(self, x, u):

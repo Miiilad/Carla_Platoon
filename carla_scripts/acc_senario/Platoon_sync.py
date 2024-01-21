@@ -3,7 +3,6 @@
 
 import carla
 import os, sys
-import math
 import time,random
 from utils.ResTOOL import Control,Objective
 import numpy as np
@@ -31,22 +30,17 @@ world = client.get_world()
 world = client.load_world("Town04_Opt")
 # world = client.load_world("Town03_Opt")
 
-# set for the fixed simulation step ref: https://carla.readthedocs.io/en/latest/adv_synchrony_timestep/#fixed-time-step
-# settings = world.get_settings()
-# settings.fixed_delta_seconds = 0.01
-# world.apply_settings(settings)
-
 settings = world.get_settings()
 # sychronous mode
 settings.synchronous_mode = True
-fixed_delta_seconds = 1/100 # 200Hz
+fixed_delta_seconds = 1/200 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 0,'save_data':1, 'load_model':0, 'train_model': 1, 'save_model':1,'run_simulation': 1,  'random_spawn':1}
+setting={"CBF" : 0,'save_data':1, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':1}
 
 # Initialize and train the network
-net = MyNeuralNetwork()
+net = MyNeuralNetwork(path="./data_low/")
 if setting["load_model"]:net.load_model()
 if setting["train_model"]:net.train_network()
 if setting["save_model"]: net.save_model()
@@ -71,12 +65,15 @@ grp = GlobalRoutePlanner(town_map, sampling_resolution)
 # set the start and end point
 start_point = spawn_point
 end_point = carla.Transform(carla.Location(x=900.665466, y=200.541804, z=1.720345))
-# end_point = carla.Transform(carla.Location(x=340.665466, y=37.541804, z=1.720345))
-# end_point = carla.Transform(carla.Location(x=340.665466, y=33.541804, z=1.720345))
-# end_point = carla.Transform(carla.Location(x=700.665466, y=100.541804, z=1.720345))
 
-# local planner for the ego car
-# ego_car.trig_autopilot()
+
+
+def saturate(value, min=0, max=1):
+    if value > max:
+        value = max
+    elif value < min:
+        value = min
+    return value
 
 # for plotjuggler
 data_to_send = {
@@ -151,30 +148,11 @@ for i in range(len_of_platoon):
 start_point_2 = lead_car.spawn_point
 route_leader = grp.trace_route(start_point_2.location, end_point.location)
 
-# #Adding random traffic to the map
-# # traffic_manager = client.get_trafficmanager(8000)
-# blueprint_library = world.get_blueprint_library()
-# vehicles = blueprint_library.filter('vehicle.*')
-# spawn_points = world.get_map().get_spawn_points()
-# number_of_vehicles=20
-# npc_vehicles = []
-# for i in range(number_of_vehicles):
-#     vehicle_bp = random.choice(vehicles)
-#     spawn_point = random.choice(spawn_points)
-#     try: 
-#         npc_vehicle = world.spawn_actor(vehicle_bp, spawn_point)
-#         npc_vehicles.append(npc_vehicle)
-#     except:
-#         pass
-#     # npc_vehicle.set_autopilot(True)
 
-# for vehicle in npc_vehicles:
-#     vehicle.set_autopilot(True)
 
 # visualize the route for leader
 visualize_waypoint(client, route_leader, sampling_resolution)
-# # visualize the route
-# visualize_waypoint(client, route_ego, sampling_resolution)
+
 
 # local planner for the leader car
 for i in range(len_of_platoon):
@@ -183,7 +161,7 @@ lead_car.set_global_plan(route_leader)
 
 # set the speed of the lead car 
 lead_car.set_speed(50)
-
+lead_car.destroy()
 # imu filter and imu data
 use_filter = "simple_low_pass"
 
@@ -196,20 +174,8 @@ elif use_filter == "kalman":
 # camera
 def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # >>>>> send data to plotjuggler >>>>>>>>
-    # done = lead_car.lp_control_run_step()
-
-
-        # print(i,ego_car[i].imu_data.accelerometer.x,input_acceleration[i])
-    # data_to_send["custom data"]["acceleration"]["y"] = ego_car[0]._acceleration.y
-    # data_to_send["custom data"]["acceleration"]["z"] = ego_car[0]._acceleration.z
-
-    data_to_send["custom data"]["velocity"]["x"] = ego_car[0]._velocity.x
-    data_to_send["custom data"]["velocity"]["y"] = ego_car[0]._velocity.y
-    data_to_send["custom data"]["velocity"]["z"] = ego_car[0]._velocity.z
-
-    # data_to_send["custom data"]["velocity"]["x"] = lead_car._velocity.x
-    # data_to_send["custom data"]["velocity"]["y"] = lead_car._velocity.y
-    # data_to_send["custom data"]["velocity"]["z"] = lead_car._velocity.z
+    print(ego_car[0].get_speed())
+    data_to_send["custom data"]["velocity"]["x"] = ego_car[0].get_speed()
     # <<<<<< send data to plotjuggler <<<<<<<<<
 
     # >>>>>>>>>>>>>>>>> filt >>>>>>>>>>>>>>>>>>
@@ -223,14 +189,10 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     data_to_send["custom data"]["filtered"]["acceleration"]["x"] = imu_data[0]
     data_to_send["custom data"]["filtered"]["acceleration"]["y"] = imu_data[1]
     data_to_send["custom data"]["filtered"]["acceleration"]["z"] = imu_data[2]
-
-    data_to_send["custom data"]["filtered"]["gyro"]["x"] = imu_data[3]
-    data_to_send["custom data"]["filtered"]["gyro"]["y"] = imu_data[4]
-    data_to_send["custom data"]["filtered"]["gyro"]["z"] = imu_data[5]
     # <<<<<< send data to plotjuggler <<<<<<<<<
     [ego_car[i].update_state(None) for i in range(len_of_platoon)]
     acceleration_list=[ego_car[i].imu_data.accelerometer.x for i in range(len_of_platoon)]
-    acceleration_lead=lead_car.imu_data.accelerometer.x
+    # acceleration_lead=lead_car.imu_data.accelerometer.x
 
 
     
@@ -238,78 +200,55 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
 
 
-    return acceleration_list,acceleration_lead
+    return acceleration_list,0
 
   
 
-def inner_control_loop(loop_name="10ms loop", target_distance=10):
+def inner_control_loop(th_br, target_distance=10):
+    x_list=[]
+    x_next_prediction_net=[]
     for i in range(len_of_platoon):
-        # if input_acceleration[i]>=0:
-        #     brake=0
-        #     throttle=input_acceleration[i]
-        # else:
-        #     brake=input_acceleration[i]
-        #     throttle=0
-        acceleration_error =  input_acceleration[i]-acceleration_list[i]
-        throttle,brake = controller_inner[i].control(acceleration_error)
+        # acceleration_error =  input_acceleration[i]-acceleration_list[i]
+        throttle,brake = controller_inner[i].control_demix(th_br)
         done = ego_car[i].lp_control_run_step(brake = brake, throttle=throttle)
         # target_location = ego_car[i].vehicle.get_transform().location
+                #Record samples for learning
+        x = np.array([ego_car[i].get_speed(),acceleration_list[i]])
+        x_list.append(x)
+        # x_next_prediction_net=net.evaluate(x, th_br).reshape(2)
 
     # print(f"distance error: {distance_error}")
     data_to_send["custom data"]["throttle"] = throttle
     data_to_send["custom data"]["brake"] = brake
     data_to_send["custom data"]["target_dist"] = target_distance
     # data_to_send["custom data"]["distance"] = distance
-    data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
+    data_to_send["custom data"]["lead_car_speed"] = 0
     data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
 
-    return done
+    return done,th_br, x_list,x_next_prediction_net
 
 def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None):
 
 
     # world.tick()
-    location_front_vehicle = lead_car.vehicle.get_transform().location
-    velocity_front_vehicle = lead_car._velocity.x
-    acceleration_front_vehicle = acceleration_lead
-    x_next_prediction_list=[]
-    x_list=[]
+    
     
     
     for i in range(len_of_platoon):
-        #Position relative
-        distance = ego_car[i]._location.distance(location_front_vehicle)
-        distance_error =  distance - target_distance 
-        
-        #Velocity relative
-        velocity_error = velocity_front_vehicle - ego_car[i]._velocity.x
-        x = np.array([distance_error,velocity_error,acceleration_list[i]])
-        input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle, u_lim)
+        # input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle, u_lim)
+        input_acceleration[i] = np.array([2.0])
 
-        #Record samples for learning
-        x_list.append(x)
-        x_next_prediction_list.append(Controller_mpc[i].eval_nominal(x, input_acceleration[i],acceleration_front_vehicle))
-        x_next_prediction_net=net.evaluate(x, input_acceleration[i]).reshape(3)
+        
 
-        #Calculate the safe control through optimization
-        if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x,input_acceleration[i],acceleration_front_vehicle,u_lim)
-        
-        # print(">>>>",i, input_acceleration[i])
-        location_front_vehicle = ego_car[i].vehicle.get_transform().location
-        velocity_front_vehicle = ego_car[i]._velocity.x
-        acceleration_front_vehicle = acceleration_list[i]
-        
+
 
     # print(f"distance error: {distance_error}")
     for i in range(len_of_platoon):
-        data_to_send["custom data"]["acceleration"]["target{}:x".format(i)] = input_acceleration[i]
-    data_to_send["custom data"]["throttle"] = throttle
+        data_to_send["custom data"]["acceleration"]["target{}:x".format(i)] = input_acceleration[i].item()
     data_to_send["custom data"]["target_dist"] = target_distance
-    data_to_send["custom data"]["distance_error"] = distance_error
-    data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
     data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
 
-    return done, input_acceleration, x_list, x_next_prediction_list,x_next_prediction_net
+    return done, input_acceleration
 
 
 def loop_20ms_loop(loop_name="20ms loop"):
@@ -330,14 +269,11 @@ throttle = 0
 target_acc = 0
 target_vel = 0
 target_dist = 0
-
+th_br=np.array([0.])
 #For Longitudinal control
 # controller=[FeedForward_pid_Controller(kp=5,ki=0,kd=50) for i in range(len_of_platoon)]
 controller_inner=[FeedForward_pid_Controller(kp=100,ki=10,kd=60) for i in range(len_of_platoon)]
-# controller_inner=[FeedForward_pid_Controller(kp=10,ki=1,kd=60) for i in range(len_of_platoon)]
-# controller_inner=[FeedForward_pid_Controller(kp=100,ki=0.1,kd=1) for i in range(len_of_platoon)]
-# controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=60) for i in range(len_of_platoon)]
-# To characterise the performance measure
+
 R = np.diag([5])
 Q = np.diag([10, 1, 0])
 Objective = Objective(Q, R)
@@ -353,15 +289,15 @@ acceleration_lead=0
 input_acceleration=[0]*len_of_platoon
 data_collected_input = []
 data_collected_output = []
-x_list_previous = []
-
+x_list= np.zeros((1,2))
+x_list_previous=[]
 
 
 
 done = False
 count = 0   
 while True:
-    lead_car.lp_control_run_step()
+
     # >>>>>>>>>>> record program execution time >>>>>>>>>>>>
     record_start_time = time.time()
     # <<<<<<<<<<<< record program execution time <<<<<<<<<<<<
@@ -375,54 +311,47 @@ while True:
 
 
     # >>>>>>>>>>>>>>>>>> run the loop >>>>>>>>>>>>>>>>>>
-    if run_time - record_5ms >= 0.01:
+    if run_time - record_5ms >= 0.005:
         acceleration_list,accleration_lead=loop_5ms_loop(run_time=run_time)
         record_5ms = run_time
-    
-    if run_time - record_20ms >= 0.2:
-        # outer loop for MPC
-        target_dist = loop_20ms_loop()
-        record_20ms = run_time
+
 
 
     if run_time - record_outer >= 0.05:
-        # loop for speed control
-        done,input_acceleration, x_list, x_next_prediction_list,x_next_prediction_net = outer_control_loop(target_distance=target_dist, run_time=run_time)
-
-        x_observed=x_list
-        if len(x_list_previous) > 0:
-            for i in range(len_of_platoon):
-                safe_distance_for_data=7
-                if x_list_previous[i][0] > (safe_distance_for_data-target_dist):
-                    input = np.append(x_list_previous[i],u_implemented[i])
-                    output= x_observed[i] - x_prediction[i]
-                    data_collected_input.append(input)
-                    data_collected_output.append(output)
-                    print("obsreved",x_observed[i]-x_prediction[i],x_observed[i]-x_prediction_net-x_prediction[i])
-                else:
-                    print(i,'th: TOO CLOSE!')
-
-                    
-        x_list_previous = x_list
-        u_implemented = input_acceleration
-        x_prediction = x_next_prediction_list 
-        x_prediction_net = x_next_prediction_net
+        # outer loop
+        done,input_acceleration = outer_control_loop(target_distance=target_dist, run_time=run_time)
 
         record_outer = run_time
 
 
+
     if run_time - record_inner >= 0.01:
-        # inner loop for speed control
-        done = inner_control_loop(target_distance=target_dist)
+        # loop for acceleration control
+        if  x_list[0][0]<10:
+                th_br=np.array(saturate(th_br+random.uniform(-0.1,0.1),min=-1.,max=1.)+1.)
+        else:
+                th_br=np.array(saturate(th_br+random.uniform(-0.1,0.1),min=-1.,max=1.))       
+        print(x_list) 
+        th_br=np.array(saturate(th_br+random.uniform(-0.1,0.1),min=-1.,max=1.))
+        done,th_br, x_list,x_next_prediction_net = inner_control_loop(th_br,target_distance=target_dist)
+        x_list
+        if len(x_list_previous) > 0:
+            for i in range(len_of_platoon):
+                input = np.append(x_list_previous[i],u_implemented)
+                output= x_list[i] 
+                data_collected_input.append(input)
+                data_collected_output.append(output)
+
+
+        x_list_previous = x_list
+        u_implemented = th_br
+        x_prediction_net = x_next_prediction_net
         record_inner = run_time
-    
-
-
+        
 
     
-    # check if local planner reach the end
-    # print(f"run time: {run_time}")
-    # print(f"ego car location: {ego_car[0]._location}")
+
+
     # <<<<<<<<<<<<<<<<<<<<<< run the loop <<<<<<<<<<<<<<<<<<<<<<
 
 
@@ -446,7 +375,6 @@ while True:
 
     if run_time > 100 or done:
         # Save data (optional)
-        
         if setting["save_data"]:net.save_data(data_collected_input,data_collected_output)
         # torch.save(input_data, 'input_data.pt'.format())
         # torch.save(output_data, 'output_data.pt'.format())
@@ -455,6 +383,6 @@ while True:
 
 for i in range(len_of_platoon):
     ego_car[i].destroy()
-lead_car.destroy()
+
 
 world.tick() # to make sure the client receives the last data, and the vehicle is destroyed before the client

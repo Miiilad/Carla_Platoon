@@ -1,5 +1,5 @@
 import carla
-import os, sys
+import os, sys,math
 file_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(file_path+'/../')
 from utils.udp_server import udp_server
@@ -193,7 +193,8 @@ class mCar:
         # update snap
         snap = run_time
         self._udp_server.update(snap=snap.frame)
-
+    def get_speed(self):
+        return math.sqrt(self._velocity.x**2 + self._velocity.y**2 + self._velocity.z**2)
     @property
     def _velocity(self):
         return self.vehicle.get_velocity()
