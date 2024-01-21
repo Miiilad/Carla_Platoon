@@ -13,8 +13,8 @@ class MyNeuralNetwork(nn.Module):
         # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
         # n = 3  # example value for n
         # nh = 10  # example value for nh
-        nh1=50
-        nh2=25
+        nh1=30
+        nh2=15
         super(MyNeuralNetwork, self).__init__()
         self.layer1 = nn.Linear(n + 1, nh1)
         self.layer2 = nn.Linear(nh1, nh2)

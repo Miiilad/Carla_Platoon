@@ -43,7 +43,7 @@ fixed_delta_seconds = 1/100 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 0,'save_data':0, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':0}
+setting={"CBF" : 0,'save_data':1, 'load_model':0, 'train_model': 1, 'save_model':1,'run_simulation': 1,  'random_spawn':1}
 
 # Initialize and train the network
 net = MyNeuralNetwork()
@@ -289,6 +289,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         #Record samples for learning
         x_list.append(x)
         x_next_prediction_list.append(Controller_mpc[i].eval_nominal(x, input_acceleration[i],acceleration_front_vehicle))
+        x_next_prediction_net=net.evaluate(x, input_acceleration[i]).reshape(3)
 
         #Calculate the safe control through optimization
         if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x,input_acceleration[i],acceleration_front_vehicle,u_lim)
@@ -308,7 +309,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
     data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
 
-    return done, input_acceleration, x_list, x_next_prediction_list
+    return done, input_acceleration, x_list, x_next_prediction_list,x_next_prediction_net
 
 
 def loop_20ms_loop(loop_name="20ms loop"):
@@ -343,7 +344,7 @@ Objective = Objective(Q, R)
 
 # Define the controller
 h=0.05
-prediction_H = 10
+prediction_H = 20
 control_H = 5
 u_lim= [-70,70]
 Controller_mpc = [Control(h, prediction_H, control_H, Objective) for i in range(len_of_platoon)]
@@ -386,9 +387,7 @@ while True:
 
     if run_time - record_outer >= 0.05:
         # loop for speed control
-        done,input_acceleration, x_list, x_next_prediction_list = outer_control_loop(target_distance=target_dist, run_time=run_time)
-        if run_time<2:
-            input_acceleration=[50]*len_of_platoon
+        done,input_acceleration, x_list, x_next_prediction_list,x_next_prediction_net = outer_control_loop(target_distance=target_dist, run_time=run_time)
 
         x_observed=x_list
         if len(x_list_previous) > 0:
@@ -399,7 +398,7 @@ while True:
                     output= x_observed[i] - x_prediction[i]
                     data_collected_input.append(input)
                     data_collected_output.append(output)
-                    print(input)
+                    print("obsreved",x_observed[i]-x_prediction[i],x_observed[i]-x_prediction_net-x_prediction[i])
                 else:
                     print(i,'th: TOO CLOSE!')
 
@@ -407,6 +406,7 @@ while True:
         x_list_previous = x_list
         u_implemented = input_acceleration
         x_prediction = x_next_prediction_list 
+        x_prediction_net = x_next_prediction_net
 
         record_outer = run_time
 
