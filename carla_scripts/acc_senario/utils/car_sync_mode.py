@@ -124,12 +124,13 @@ class mCar:
     def set_speed(self, speed):
         self.run_speed = speed
 
-    def lp_control_run_step(self,brake = 0, throttle = None, run_time = 0):
+    def lp_control_run_step(self,brake = -0.1, throttle = -0.1, run_time = 0):
         self.localplanner.set_speed(self.run_speed)
         control = self.localplanner.run_step()
 
-        if throttle is not None:
+        if throttle >=0:
             control.throttle = throttle
+        if brake >=0:
             control.brake = brake
 
         self._udp_server.update_control(control)
