@@ -158,7 +158,7 @@ class Control():
         m.Params.LogToConsole = 0
         m.Params.FeasibilityTol = 1e-3
         m.setObjective(objective, GRB.MINIMIZE)
-        etta = 0.2
+        etta = 0.1
 
         y=net.evaluate(x,u)
         bx,ax = net.partial_derivative_u(x)
@@ -189,7 +189,7 @@ class Control():
 
     def BF(self,x):
         W=np.diag([1,0,0.1])
-        C=6
+        C=3
         if isinstance(x, np.ndarray):
             out = C**2 - x.T @ W @ x  
         else:
