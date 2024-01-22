@@ -39,14 +39,15 @@ world = client.load_world("Town04_Opt")
 settings = world.get_settings()
 # sychronous mode
 settings.synchronous_mode = True
-fixed_delta_seconds = 1/100 # 200Hz
+fixed_delta_seconds = 1/200 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 0,'save_data':0, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':1}
+setting={"CBF" : 0,'save_data':0, 'load_model':1, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':0}
+
 
 # Initialize and train the network
-net = MyNeuralNetwork()
+net = MyNeuralNetwork(path="./data/dodge/")
 if setting["load_model"]:net.load_model()
 if setting["train_model"]:net.train_network()
 if setting["save_model"]: net.save_model()
@@ -127,7 +128,7 @@ world.tick()
 reference_vehicle_transform = lead_car.vehicle.get_transform()
 
 # spawn the ego car
-len_of_platoon=1
+len_of_platoon=3
 ego_car=[]
 route_ego=[]
 for i in range(len_of_platoon):
@@ -256,8 +257,8 @@ def inner_control_loop(loop_name="10ms loop", target_distance=10):
         # target_location = ego_car[i].vehicle.get_transform().location
 
     # print(f"distance error: {distance_error}")
-    data_to_send["custom data"]["throttle"] = throttle
-    data_to_send["custom data"]["brake"] = brake
+        data_to_send["custom data"]["throttle{}".format(i)] = throttle
+        data_to_send["custom data"]["brake{}".format(i)] = brake
     data_to_send["custom data"]["target_dist"] = target_distance
     # data_to_send["custom data"]["distance"] = distance
     data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
@@ -284,7 +285,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         #Velocity relative
         velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
         x = np.array([distance_error,velocity_error,acceleration_list[i]])
-        input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle, u_lim)
+        input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle, u_lim)#+3*np.sin(5*run_time+(i+1)*2)
 
         #Record samples for learning
         x_list.append(x)
@@ -303,10 +304,11 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     # print(f"distance error: {distance_error}")
     for i in range(len_of_platoon):
         data_to_send["custom data"]["acceleration"]["target{}:x".format(i)] = input_acceleration[i]
+        data_to_send["custom data"]["ego_car_speed{}".format(i)] = ego_car[i].get_speed()
+        data_to_send["custom data"]["distance_error{}".format(i)] = x_list[i][0]
     data_to_send["custom data"]["target_dist"] = target_distance
-    data_to_send["custom data"]["distance_error"] = distance_error
     data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
-    data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0].get_speed()
+    
 
     return done, input_acceleration, x_list, x_next_prediction_list,x_next_prediction_net
 
@@ -338,7 +340,7 @@ controller_inner=[FeedForward_pid_Controller(kp=100,ki=10,kd=60) for i in range(
 # controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=60) for i in range(len_of_platoon)]
 # To characterise the performance measure
 R = np.diag([5])
-Q = np.diag([10, 1, 0])
+Q = np.diag([10, 3, 1])
 Objective = Objective(Q, R)
 
 # Define the controller
@@ -374,7 +376,7 @@ while True:
 
 
     # >>>>>>>>>>>>>>>>>> run the loop >>>>>>>>>>>>>>>>>>
-    if run_time - record_5ms >= 0.01:
+    if run_time - record_5ms >= 0.005:
         acceleration_list,accleration_lead=loop_5ms_loop(run_time=run_time)
         record_5ms = run_time
     
