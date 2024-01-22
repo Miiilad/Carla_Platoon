@@ -43,7 +43,7 @@ fixed_delta_seconds = 1/200 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 0,'save_data':0, 'load_model':1, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':0}
+setting={"CBF" : 0,'save_data':0, 'load_model':1, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':1}
 
 
 # Initialize and train the network
@@ -183,7 +183,7 @@ for i in range(len_of_platoon):
 lead_car.set_global_plan(route_leader)
 
 # set the speed of the lead car 
-lead_car.set_speed(50)
+lead_car.set_speed(80)
 
 # imu filter and imu data
 use_filter = "simple_low_pass"
@@ -340,13 +340,13 @@ controller_inner=[FeedForward_pid_Controller(kp=100,ki=10,kd=60) for i in range(
 # controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=60) for i in range(len_of_platoon)]
 # To characterise the performance measure
 R = np.diag([5])
-Q = np.diag([10, 3, 1])
+Q = np.diag([5, 5, 0.1])
 Objective = Objective(Q, R)
 
 # Define the controller
-h=0.05
+h=0.1
 prediction_H = 20
-control_H = 5
+control_H = 10
 u_lim= [-70,70]
 Controller_mpc = [Control(h, prediction_H, control_H, Objective) for i in range(len_of_platoon)]
 acceleration_list=[0]*len_of_platoon
@@ -386,7 +386,7 @@ while True:
         record_20ms = run_time
 
 
-    if run_time - record_outer >= 0.05:
+    if run_time - record_outer >= 0.1:
         # loop for speed control
         done,input_acceleration, x_list, x_next_prediction_list,x_next_prediction_net = outer_control_loop(target_distance=target_dist, run_time=run_time)
 

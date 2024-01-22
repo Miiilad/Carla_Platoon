@@ -18,7 +18,7 @@ class Control():
 
         self.Objective = Objective
 
-        A = np.array([[0, 1, -3],
+        A = np.array([[0, 1, -1.6],
                       [0, 0, -1],
                       [0, 0, -2.17391304]])
         B = np.array([[0],
