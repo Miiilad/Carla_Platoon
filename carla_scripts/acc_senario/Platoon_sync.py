@@ -285,7 +285,8 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         #Velocity relative
         velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
         x = np.array([distance_error,velocity_error,acceleration_list[i]])
-        input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle, u_lim)#+3*np.sin(5*run_time+(i+1)*2)
+        input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle,u_pre_list[i], u_lim)#+3*np.sin(5*run_time+(i+1)*2)
+        u_pre_list[i] = input_acceleration[i]
 
         #Record samples for learning
         x_list.append(x)
@@ -355,7 +356,7 @@ input_acceleration=[0]*len_of_platoon
 data_collected_input = []
 data_collected_output = []
 x_list_previous = []
-
+u_pre_list=np.zeros(len_of_platoon)
 
 
 

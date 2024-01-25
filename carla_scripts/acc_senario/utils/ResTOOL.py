@@ -34,9 +34,10 @@ class Control():
         self.x_predict_sequence=[]
         self.u_pre = 0.0
 
-    def calculate(self, x,v_dot_lead, u_lim):
+    def calculate(self, x,v_dot_lead,u_pre, u_lim):
         self.xp = np.copy(x)
         self.v_dot_lead=v_dot_lead
+        self.u_pre=u_pre.reshape(self.dim_m,1)
 
         #################
         m = gp.Model("qp")
@@ -125,10 +126,12 @@ class Control():
         return self.Objective.sum
 
     def opt_obj_mat(self, Xp, Up):
+        u_rate_weight= 100 * self.Objective.R
         o1 = (Xp.T @ self.Objective.Q @ Xp)
         o2 = (Up.T @ self.Objective.R @ Up)
-        o3 = 100*(Up[:,1:].T - Up[:,:-1].T)  @ self.Objective.R @ (Up[:,1:] - Up[:,:-1]) 
-        obj = sum([o1[i, i] + o2[i, i] for i in range(self.p_H)])+sum([o3[i, i] for i in range(self.c_H)])
+        o3 = (Up[:,1:].T - Up[:,:-1].T)  @ u_rate_weight @ (Up[:,1:] - Up[:,:-1]) 
+        o4 = (Up[:,0].T - self.u_pre.T)  @ u_rate_weight @ (Up[:,0] - self.u_pre)
+        obj = sum([o1[i, i] + o2[i, i] for i in range(self.p_H)])+sum([o3[i, i] for i in range(self.c_H)])+o4
         return obj
 
     def opt_const_mat(self, m, Xp, Up):
