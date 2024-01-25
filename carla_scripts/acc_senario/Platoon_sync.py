@@ -8,6 +8,7 @@ import time,random
 from utils.ResTOOL import Control,Objective
 import numpy as np
 
+from utils.attacker import DosAttacker
 
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
