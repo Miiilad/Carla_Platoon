@@ -43,7 +43,7 @@ fixed_delta_seconds = 1/200 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 0,'save_data':0, 'load_model':1, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':1}
+setting={"CBF" : 0,'save_data':0, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':0}
 
 
 # Initialize and train the network
