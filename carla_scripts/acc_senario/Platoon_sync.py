@@ -43,7 +43,7 @@ fixed_delta_seconds = 1/200 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 0,'save_data':0, 'load_model':1, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':1}
+setting={"CBF" : 0,'save_data':0, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':0}
 
 
 # Initialize and train the network
@@ -128,7 +128,7 @@ world.tick()
 reference_vehicle_transform = lead_car.vehicle.get_transform()
 
 # spawn the ego car
-len_of_platoon=3
+len_of_platoon=1
 ego_car=[]
 route_ego=[]
 for i in range(len_of_platoon):
@@ -252,7 +252,7 @@ def inner_control_loop(loop_name="10ms loop", target_distance=10):
         #     brake=input_acceleration[i]
         #     throttle=0
         acceleration_error =  input_acceleration[i]-acceleration_list[i]
-        throttle,brake = controller_inner[i].control(acceleration_error)
+        throttle,brake = controller_inner[i].control_unmix(input_acceleration[i])
         done = ego_car[i].lp_control_run_step(brake = brake, throttle=throttle)
         # target_location = ego_car[i].vehicle.get_transform().location
 
@@ -339,15 +339,15 @@ controller_inner=[FeedForward_pid_Controller(kp=100,ki=10,kd=60) for i in range(
 # controller_inner=[FeedForward_pid_Controller(kp=100,ki=0.1,kd=1) for i in range(len_of_platoon)]
 # controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=60) for i in range(len_of_platoon)]
 # To characterise the performance measure
-R = np.diag([5])
-Q = np.diag([5, 5, 0.1])
+R = np.diag([50])
+Q = np.diag([10, 5, 0.1])
 Objective = Objective(Q, R)
 
 # Define the controller
 h=0.1
 prediction_H = 20
 control_H = 10
-u_lim= [-70,70]
+u_lim= [-1,1]
 Controller_mpc = [Control(h, prediction_H, control_H, Objective) for i in range(len_of_platoon)]
 acceleration_list=[0]*len_of_platoon
 acceleration_lead=0
