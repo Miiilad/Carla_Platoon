@@ -285,7 +285,9 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         #Velocity relative
         velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
         x = np.array([distance_error,velocity_error,acceleration_list[i]])
+        #Calculate control
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle,u_pre_list[i], u_lim)#+3*np.sin(5*run_time+(i+1)*2)
+        # record u for next step: it willl be needed for control value calculation
         u_pre_list[i] = input_acceleration[i]
 
         #Record samples for learning
@@ -334,11 +336,8 @@ target_vel = 0
 target_dist = 0
 
 #For Longitudinal control
-# controller=[FeedForward_pid_Controller(kp=5,ki=0,kd=50) for i in range(len_of_platoon)]
 controller_inner=[FeedForward_pid_Controller(kp=100,ki=10,kd=60) for i in range(len_of_platoon)]
-# controller_inner=[FeedForward_pid_Controller(kp=10,ki=1,kd=60) for i in range(len_of_platoon)]
-# controller_inner=[FeedForward_pid_Controller(kp=100,ki=0.1,kd=1) for i in range(len_of_platoon)]
-# controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=60) for i in range(len_of_platoon)]
+
 # To characterise the performance measure
 R = np.diag([50])
 Q = np.diag([10, 5, 0.1])
