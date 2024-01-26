@@ -110,9 +110,16 @@ data_to_send = {
                         "y":0.0,
                         "z":0.0,
                         },
-                            }
+                            },
                 }
             }
+
+# attacker
+from utils.attacker import configs
+configs["attack_type"] = "triangle"
+configs["attack_dense"] = 0.4
+configs["resolution"] = 100 # the resolution of the attack profile
+attacker = DosAttacker(configs=configs)
 
 # record the running time
 # init_time = world.wait_for_tick().timestamp.platform_timestamp
@@ -276,6 +283,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     acceleration_front_vehicle = acceleration_lead
     x_next_prediction_list=[]
     x_list=[]
+    speed_attacked_list = []
     
     
     for i in range(len_of_platoon):
@@ -284,7 +292,17 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         distance_error =  distance - target_distance 
         
         #Velocity relative
-        velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
+        # velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
+
+        speed_attacked = attacker.get_attacked_signal(ego_car[i].get_speed(), int(run_time*100))
+        speed_attacked_list.append(speed_attacked)
+
+        # start attack at the time of 5s
+        if run_time < 5:
+            velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
+        else:
+            velocity_error = velocity_front_vehicle - speed_attacked
+
         x = np.array([distance_error,velocity_error,acceleration_list[i]])
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle, u_lim)#+3*np.sin(5*run_time+(i+1)*2)
 
@@ -307,6 +325,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         data_to_send["custom data"]["acceleration"]["target{}:x".format(i)] = input_acceleration[i]
         data_to_send["custom data"]["ego_car_speed{}".format(i)] = ego_car[i].get_speed()
         data_to_send["custom data"]["distance_error{}".format(i)] = x_list[i][0]
+        data_to_send["custom data"]["speed attacked{}".format(i)] = float(speed_attacked_list[i])
     data_to_send["custom data"]["target_dist"] = target_distance
     data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
     
