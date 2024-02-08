@@ -46,6 +46,12 @@ settings.fixed_delta_seconds = fixed_delta_seconds
 
 setting={"CBF" : 0,'save_data':0, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':0}
 
+# attacker
+from utils.attacker import configs
+configs["attack_type"] = "triangle"
+configs["attack_dense"] = 0.55
+configs["resolution"] = 100 # the resolution of the attack profile
+attacker = DosAttacker(configs=configs)
 
 # Initialize and train the network
 net = MyNeuralNetwork(path="./data/dodge/")
@@ -114,12 +120,7 @@ data_to_send = {
                 }
             }
 
-# attacker
-from utils.attacker import configs
-configs["attack_type"] = "triangle"
-configs["attack_dense"] = 0.4
-configs["resolution"] = 100 # the resolution of the attack profile
-attacker = DosAttacker(configs=configs)
+
 
 # record the running time
 # init_time = world.wait_for_tick().timestamp.platform_timestamp
@@ -298,9 +299,10 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         speed_attacked_list.append(speed_attacked)
 
         # start attack at the time of 5s
-        if run_time < 5:
+        if run_time < 15:
             velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
         else:
+            print("Attacked!")
             velocity_error = velocity_front_vehicle - speed_attacked
 
         x = np.array([distance_error,velocity_error,acceleration_list[i]])
@@ -340,6 +342,8 @@ def loop_20ms_loop(loop_name="20ms loop"):
     # this loop is for MPC
     target_dist = 20
     return target_dist
+
+
     
 
 
@@ -419,7 +423,7 @@ while True:
                     output= x_observed[i] - x_prediction[i]
                     data_collected_input.append(input)
                     data_collected_output.append(output)
-                    print("obsreved",x_observed[i]-x_prediction[i],x_observed[i]-x_prediction_net-x_prediction[i])
+                    # print("obsreved",x_observed[i]-x_prediction[i],x_observed[i]-x_prediction_net-x_prediction[i])
                 else:
                     print(i,'th: TOO CLOSE!')
 

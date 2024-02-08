@@ -173,7 +173,8 @@ class Control():
         f_bar = self.eval_nominal(x,u,v_dot_lead)
         f_bar=np.array(f_bar).reshape(self.dim_n,1)
         Bx=self.BF(x)
-        Bx_next=self.BF(f_bar+ ax+bx @ Us)
+        # Bx_next=self.BF(f_bar+ ax+bx @ Us)
+        Bx_next=self.BF(f_bar+ 0*ax+0*bx @ Us)
 
         m.addConstr(Bx_next -Bx >= -etta * Bx, "constraint")
 
