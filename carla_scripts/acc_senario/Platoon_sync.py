@@ -182,7 +182,9 @@ route_leader = grp.trace_route(start_point_2.location, end_point.location)
 #     vehicle.set_autopilot(True)
 
 # visualize the route for leader
-visualize_waypoint(client, route_leader, sampling_resolution)
+#comment if not required
+#visualize_waypoint(client, route_leader, sampling_resolution)
+
 # # visualize the route
 # visualize_waypoint(client, route_ego, sampling_resolution)
 
@@ -202,6 +204,21 @@ if use_filter == "simple_low_pass":
     imu_data = [0 for _ in range(6)]
 elif use_filter == "kalman":
     pass
+
+def update_sphere_indicator(vehicle,indicator):
+    height_above_vehicle=2
+    sphere_size=0.1
+    vehicle_location = vehicle._location
+    sphere_location = carla.Location(vehicle_location.x, vehicle_location.y, vehicle_location.z + height_above_vehicle)
+    
+    # Example mode determination based on speed (you can replace this with your own logic)
+    if indicator:  # Example threshold for changing color
+        color = carla.Color(255, 0, 0)  # Green for slow speed
+    else:
+        color = carla.Color(0, 255, 0)  # Red for high speed
+    
+    # Draw the sphere
+    world.debug.draw_point(sphere_location, size=sphere_size, color=color, life_time=0.4, persistent_lines=False)
 
 # camera
 def loop_5ms_loop(loop_name="5ms loop", run_time=None):
@@ -301,9 +318,11 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         # start attack at the time of 5s
         if run_time < 15:
             velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
+            update_sphere_indicator(lead_car,0)
         else:
             print("Attacked!")
             velocity_error = velocity_front_vehicle - speed_attacked
+            update_sphere_indicator(lead_car,1)
 
         x = np.array([distance_error,velocity_error,acceleration_list[i]])
         #Calculate control
