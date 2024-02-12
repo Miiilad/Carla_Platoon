@@ -7,6 +7,7 @@ import math
 import time,random
 from utils.ResTOOL import Control,Objective
 import numpy as np
+import pandas as pd
 
 from utils.attacker import DosAttacker
 
@@ -21,6 +22,9 @@ from utils.udp_server import send_custom_data
 from utils.controller import FeedForward_pid_Controller
 from utils.filter import CarlaIMULowPassFilter
 from utils.neural_learner import MyNeuralNetwork
+
+# pandas
+df = pd.DataFrame(columns=['time stamp', 'acceleration', 'yaw get_transform', 'yaw2'])
 
 # neural network
 network_path = os.path.join(current_path,"../neural")
@@ -90,7 +94,10 @@ end_point = carla.Transform(carla.Location(x=900.665466, y=200.541804, z=1.72034
 data_to_send = {
                 "timestamp": 0,
                 "custom2":{
-                    "acceleration without filtered":{}
+                    "acceleration without filtered":{},
+                    "yaw angle":{},
+                    "yaw angle rate":{},
+                    "yaw angle 2":{},
                 },
                 "custom data":{
                 "acceleration":{"x":0.0,
@@ -267,6 +274,13 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     for i in range(len_of_platoon):
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
         data_to_send["custom2"]["acceleration without filtered"]["{}:x".format(i)] = ego_car[i]._acceleration.x
+        # get the yaw angle of the vehicle
+        data_to_send["custom2"]["yaw angle"]["{}:x".format(i)] = ego_car[i].vehicle.get_transform().rotation.yaw
+        data_to_send["custom2"]["yaw angle rate"]["{}:x".format(i)] = ego_car[i].imu_data.gyroscope.z
+        data_to_send["custom2"]["yaw angle 2"]["{}:x".format(i)] = ego_car[i].imu_data.compass
+
+        # pandas loc append
+        df.loc[len(df)] = [run_time, ego_car[i].imu_data.accelerometer.x, ego_car[i].vehicle.get_transform().rotation.yaw, ego_car[i].imu_data.compass]
 
 
     return acceleration_list,acceleration_lead
@@ -320,7 +334,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         speed_attacked_list.append(speed_attacked)
 
         # start attack at the time of 5s
-        if run_time < 15:
+        if run_time < 100000:
             velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
             update_sphere_indicator(lead_car,0)
         else:
@@ -492,7 +506,7 @@ while True:
     # <<<<< if running just for visualization <<<<<<<<<<
 
 
-    if run_time > 100 or done:
+    if run_time > 1000 or done:
         # Save data (optional)
         
         if setting["save_data"]:net.save_data(data_collected_input,data_collected_output)
@@ -504,5 +518,8 @@ while True:
 for i in range(len_of_platoon):
     ego_car[i].destroy()
 lead_car.destroy()
+
+# save the data
+df.to_csv('/home/docker/carla_scripts/datas.csv')
 
 world.tick() # to make sure the client receives the last data, and the vehicle is destroyed before the client
