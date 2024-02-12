@@ -193,6 +193,9 @@ class Control():
 
 
     def BF(self,x):
+        '''
+        barrier function
+        '''
         W=np.diag([1,0,0.1])
         C=3
         if isinstance(x, np.ndarray):

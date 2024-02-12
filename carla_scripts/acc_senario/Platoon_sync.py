@@ -89,6 +89,9 @@ end_point = carla.Transform(carla.Location(x=900.665466, y=200.541804, z=1.72034
 # for plotjuggler
 data_to_send = {
                 "timestamp": 0,
+                "custom2":{
+                    "acceleration without filtered":{}
+                },
                 "custom data":{
                 "acceleration":{"x":0.0,
                                 "y":0.0,
@@ -263,6 +266,7 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     
     for i in range(len_of_platoon):
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
+        data_to_send["custom2"]["acceleration without filtered"]["{}:x".format(i)] = ego_car[i]._acceleration.x
 
 
     return acceleration_list,acceleration_lead
