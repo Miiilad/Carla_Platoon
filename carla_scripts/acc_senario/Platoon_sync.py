@@ -24,7 +24,7 @@ from utils.filter import CarlaIMULowPassFilter
 from utils.neural_learner import MyNeuralNetwork
 
 # pandas
-df = pd.DataFrame(columns=['time stamp', 'acceleration', 'yaw get_transform', 'yaw2'])
+df = pd.DataFrame(columns=['time stamp', 'acceleration', 'yaw get_transform', 'yaw2', 'input_acceleration'])
 
 # neural network
 network_path = os.path.join(current_path,"../neural")
@@ -279,10 +279,6 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
         data_to_send["custom2"]["yaw angle rate"]["{}:x".format(i)] = ego_car[i].imu_data.gyroscope.z
         data_to_send["custom2"]["yaw angle 2"]["{}:x".format(i)] = ego_car[i].imu_data.compass
 
-        # pandas loc append
-        df.loc[len(df)] = [run_time, ego_car[i].imu_data.accelerometer.x, ego_car[i].vehicle.get_transform().rotation.yaw, ego_car[i].imu_data.compass]
-
-
     return acceleration_list,acceleration_lead
 
   
@@ -334,7 +330,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         speed_attacked_list.append(speed_attacked)
 
         # start attack at the time of 5s
-        if run_time < 100000:
+        if run_time < 10000:
             velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
             update_sphere_indicator(lead_car,0)
         else:
@@ -370,7 +366,8 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         data_to_send["custom data"]["speed attacked{}".format(i)] = float(speed_attacked_list[i])
     data_to_send["custom data"]["target_dist"] = target_distance
     data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
-    
+
+    df.loc[len(df)] = [run_time, ego_car[0].imu_data.accelerometer.x, ego_car[0].vehicle.get_transform().rotation.yaw, ego_car[0].imu_data.compass, input_acceleration[0]]
 
     return done, input_acceleration, x_list, x_next_prediction_list,x_next_prediction_net
 
@@ -520,6 +517,6 @@ for i in range(len_of_platoon):
 lead_car.destroy()
 
 # save the data
-df.to_csv('/home/docker/carla_scripts/datas.csv')
+df.to_csv('/home/docker/carla_scripts/datas2.csv')
 
 world.tick() # to make sure the client receives the last data, and the vehicle is destroyed before the client
