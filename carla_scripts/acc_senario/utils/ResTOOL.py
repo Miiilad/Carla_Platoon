@@ -113,7 +113,7 @@ class Control():
         return u
     def eval_nominal(self,x,u,v_dot_lead):
         x=np.array(x)
-        x_next=self.Ad @ x + (self.Bd * u + self.Hd * v_dot_lead).flatten()
+        x_next=(self.Ad @ x).reshape(self.dim_n,1) + (self.Bd * u + self.Hd * v_dot_lead)
         return x_next
     def opt_obj(self, Up):
         self.Objective.resetSum()
@@ -154,7 +154,7 @@ class Control():
     def Safe_Control(self,net,x,u,v_dot_lead,u_lim):
         m = gp.Model("qp")
         # m.params.NonConvex = 2
-        Us = m.addMVar(shape=(self.dim_m, self.dim_m), lb=list(u_lim[0]*np.ones((self.dim_m, self.dim_m))),
+        Us = m.addMVar(shape=(self.dim_m, 1), lb=list(u_lim[0]*np.ones((self.dim_m, self.dim_m))),
                        ub=list(u_lim[1]*np.ones((self.dim_m, self.dim_m))), name="U")
         
         # Define the objective function
@@ -162,21 +162,26 @@ class Control():
         m.Params.LogToConsole = 0
         m.Params.FeasibilityTol = 1e-3
         m.setObjective(objective, GRB.MINIMIZE)
-        etta = 0.1
+        etta = 0.6
 
         y=net.evaluate(x,u)
         bx,ax = net.partial_derivative_u(x)
         # print(" NN:",y)
         # print("Gradient:", bx,ax)
         # print("a(x)+b(x)u:", ax+bx*u,'\n')
+        f_bar = self.eval_nominal(x,Us,v_dot_lead)#+ ax+bx @ Us
 
-        f_bar = self.eval_nominal(x,u,v_dot_lead)
-        f_bar=np.array(f_bar).reshape(self.dim_n,1)
+        # f_bar=np.array(f_bar).reshape(self.dim_n,1)
         Bx=self.BF(x)
+        #commented for now
         # Bx_next=self.BF(f_bar+ ax+bx @ Us)
-        Bx_next=self.BF(f_bar+ 0*ax+0*bx @ Us)
+        # Bx_next=self.BF(f_bar+ 0*ax+0*bx @ Us)
+        x_dot=1/self.h*(f_bar-x.reshape(self.dim_n,1))
+        # print(self.barrier_higher_degree(x,x_dot,v_dot_lead))
+    
 
-        m.addConstr(Bx_next -Bx >= -etta * Bx, "constraint")
+        # m.addConstr(Bx_next -Bx >= -etta * Bx, "constraint")
+        m.addConstr(self.barrier_higher_degree(x,x_dot,v_dot_lead) >= 0, "constraint")
 
         try:
             # Solve the model
@@ -193,8 +198,8 @@ class Control():
 
 
     def BF(self,x):
-        W=np.diag([1,0,0.1])
-        C=3
+        W=np.diag([1,0,1])
+        C=2
         if isinstance(x, np.ndarray):
             out = C**2 - x.T @ W @ x  
         else:
@@ -204,6 +209,25 @@ class Control():
             # Define the complete expression
             out = C**2 - quad_expr  # Assuming C is a constant 
         return out
+    
+    def barrier_higher_degree(self,x,x_dot,v_dot_lead):
+        d_th=5
+        
+        dd=x[0]
+        dv=x[1]
+        a=x[2]
+        
+        dv_dot=v_dot_lead-a
+        a_dot=x_dot[2]
+        
+        k1,k2,k3=[0.005,0.003,0.001]
+        
+        phi0=d_th**2-dd**2
+        phi1=-2*dv*dd + k1*phi0
+        phi2=-2*dv_dot*dd-2*dv**2+k2*phi1
+        phi3=2*a_dot*dd-2*dv_dot*dv-4*dv_dot*dv+k3*phi2
+        
+        return phi3
 
 
 class Objective():
