@@ -198,8 +198,16 @@ class Control():
 
 
     def BF(self,x):
+<<<<<<< HEAD
         W=np.diag([1,0,1])
         C=2
+=======
+        '''
+        barrier function
+        '''
+        W=np.diag([1,0,0.1])
+        C=3
+>>>>>>> 42277d4fa461c29387a4cc0185b064cf481937de
         if isinstance(x, np.ndarray):
             out = C**2 - x.T @ W @ x  
         else:
