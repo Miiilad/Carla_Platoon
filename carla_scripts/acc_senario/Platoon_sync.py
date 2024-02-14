@@ -24,7 +24,7 @@ from utils.filter import CarlaIMULowPassFilter
 from utils.neural_learner import MyNeuralNetwork
 
 # pandas
-df = pd.DataFrame(columns=['time stamp', 'acceleration', 'yaw get_transform', 'yaw2', 'input_acceleration'])
+df = pd.DataFrame(columns=['time stamp', 'acceleration', 'yaw get_transform', 'yaw2', 'input_acceleration', 'speed', 'steering angle'])
 
 # neural network
 network_path = os.path.join(current_path,"../neural")
@@ -49,6 +49,7 @@ settings.fixed_delta_seconds = fixed_delta_seconds
 
 
 setting={"CBF" : 0,'save_data':0, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':0}
+speed_up_time = 10
 
 # attacker
 from utils.attacker import configs
@@ -283,7 +284,7 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
 
   
 
-def inner_control_loop(loop_name="10ms loop", target_distance=10):
+def inner_control_loop(loop_name="10ms loop", target_distance=10, run_time=None):
     for i in range(len_of_platoon):
         # if input_acceleration[i]>=0:
         #     brake=0
@@ -295,6 +296,9 @@ def inner_control_loop(loop_name="10ms loop", target_distance=10):
         throttle,brake = controller_inner[i].control_unmix(input_acceleration[i])
         done = ego_car[i].lp_control_run_step(brake = brake, throttle=throttle)
         # target_location = ego_car[i].vehicle.get_transform().location
+    # global speed_up_time
+    # if run_time > speed_up_time:
+    #     lead_car.lp_control_run_step(brake=0.0, throttle=1.0)
 
     # print(f"distance error: {distance_error}")
         data_to_send["custom data"]["throttle{}".format(i)] = throttle
@@ -330,7 +334,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         speed_attacked_list.append(speed_attacked)
 
         # start attack at the time of 5s
-        if run_time < 10000:
+        if run_time < 1000:
             velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
             update_sphere_indicator(lead_car,0)
         else:
@@ -341,6 +345,12 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         x = np.array([distance_error,velocity_error,acceleration_list[i]])
         #Calculate control
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle,u_pre_list[i], u_lim)#+3*np.sin(5*run_time+(i+1)*2)
+        print(">>>>",i, input_acceleration[i], "type:", type(input_acceleration[i]))
+        if run_time > speed_up_time:
+            input_acceleration[i] = np.float64(0.1)
+        if run_time > 20:
+            input_acceleration[i] = np.float64(0.99)
+
         # record u for next step: it willl be needed for control value calculation
         u_pre_list[i] = input_acceleration[i]
 
@@ -351,7 +361,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
 
         #Calculate the safe control through optimization
         if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x,input_acceleration[i],acceleration_front_vehicle,u_lim)
-        
+
         # print(">>>>",i, input_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
         velocity_front_vehicle = ego_car[i].get_speed()
@@ -367,7 +377,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     data_to_send["custom data"]["target_dist"] = target_distance
     data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
 
-    df.loc[len(df)] = [run_time, ego_car[0].imu_data.accelerometer.x, ego_car[0].vehicle.get_transform().rotation.yaw, ego_car[0].imu_data.compass, input_acceleration[0]]
+    df.loc[len(df)] = [run_time, ego_car[0].imu_data.accelerometer.x, ego_car[0].vehicle.get_transform().rotation.yaw, ego_car[0].imu_data.compass, input_acceleration[0], ego_car[0]._abs_velocity, ego_car[0].steering_angle]
 
     return done, input_acceleration, x_list, x_next_prediction_list,x_next_prediction_net
 
@@ -472,7 +482,7 @@ while True:
 
     if run_time - record_inner >= 0.01:
         # inner loop for speed control
-        done = inner_control_loop(target_distance=target_dist)
+        done = inner_control_loop(target_distance=target_dist, run_time=run_time)
         record_inner = run_time
     
 
@@ -503,7 +513,7 @@ while True:
     # <<<<< if running just for visualization <<<<<<<<<<
 
 
-    if run_time > 1000 or done:
+    if run_time > 40 or done:
         # Save data (optional)
         
         if setting["save_data"]:net.save_data(data_collected_input,data_collected_output)
@@ -517,6 +527,6 @@ for i in range(len_of_platoon):
 lead_car.destroy()
 
 # save the data
-df.to_csv('/home/docker/carla_scripts/datas2.csv')
+df.to_csv('/home/docker/carla_scripts/datas4.csv')
 
 world.tick() # to make sure the client receives the last data, and the vehicle is destroyed before the client

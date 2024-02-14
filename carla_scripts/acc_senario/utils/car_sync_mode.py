@@ -68,7 +68,7 @@ class mCar:
 
         gnss_bp = world.get_blueprint_library().find('sensor.other.gnss')
         # update rate is 30hz
-        gnss_tf = carla.Transform()
+        gnss_tf = carla.Transform(carla.Location(x=0, z=1), carla.Rotation(pitch=0, yaw=0, roll=0))
         self.gnss = world.spawn_actor(gnss_bp, gnss_tf, attach_to=self.vehicle)
 
         collision_bp = world.get_blueprint_library().find('sensor.other.collision')
@@ -208,3 +208,11 @@ class mCar:
     @property
     def _location(self):
         return self.vehicle.get_location()
+    
+    @property
+    def _abs_velocity(self):
+        return math.sqrt(self._velocity.x**2 + self._velocity.y**2 + self._velocity.z**2)
+    
+    @property
+    def steering_angle(self):
+        return self.vehicle.get_control().steer
