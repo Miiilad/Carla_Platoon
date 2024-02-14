@@ -5,6 +5,10 @@ configs = {
     "attack_dense": 0.5,
     "seed_num": 200,
     "attack_type": "triangle",
+    "power": 1.0,
+    "split_rate": 0.7,
+
+    "plot": True,
 }
 
 class DosAttacker:
@@ -56,29 +60,66 @@ class DosAttacker:
             temp_profile = temp_profile[n+phase,:]
             signal = signal * temp_profile
         return signal
-    
 
+class FDI_attacker():
+    '''
+    FDI attacker:
+    1. Given a value of "power" of the attacker, the attack power can be reflected on this value.
+    2. numpy generate random seed to make sure the attack is random and we get the same result every time.
+    '''
+    def __init__(self, configs) -> None:
+        for key, value in configs.items():
+            setattr(self, key, value)
+        
+    def get_attack_profile(self, signal_size = 1, seed_num = 200):
+        # gererate random numbers with size = (resolution, signal_size)
+        weights_profile = np.random.RandomState(seed_num).rand(self.resolution, signal_size)*(1-self.split_rate) + self.split_rate
+        sign_profile = np.random.RandomState(seed_num+1).rand(self.resolution, signal_size)-0.5
+        sign_profile = np.sign(sign_profile)
+        
+        self.attack_profile = weights_profile * sign_profile*self.power
+
+        if self.plot:
+            plt.figure()
+            for i in range(signal_size):
+                x = np.linspace(0, self.resolution, self.resolution)
+                plt.subplot(signal_size, 1, i+1)
+                plt.scatter(x, self.attack_profile[:,i])
+
+                # grid legend
+                plt.grid()
+                plt.legend([f"signal {i}"])
+
+                # x,y axis
+                plt.xlim([0, self.resolution])
+                plt.ylim([-1.2, 1.2])
+            plt.show()
+
+        return self.attack_profile
+    
+    def get_attacked_signal(self, signal, run_time, phase = 0, signal_size = 1):
+        n = (run_time % self.resolution)
+        temp_profile = self.get_attack_profile(signal_size=signal_size)
+        temp_profile = temp_profile[n+phase,:]
+        signal = signal + temp_profile
+        return signal
+
+    
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>> test >>>>>>>>>>>>>>>>>>>>>>>>>>>
 TEST_ATTACK_PROFILE = True
 TEST_SIGNAL = True
 
+import matplotlib.pyplot as plt
 
-# main
-if __name__ == "__main__":
-    configs = configs
-    configs["attack_dense"] = 0.8
-    configs["resolution"] = 100
-    configs["attack_type"] = "triangle"
 
-    signal_size = 3
-
+def test_dos_attack(configs):
     attacker = DosAttacker(configs=configs)
 
-    import matplotlib.pyplot as plt
     if TEST_ATTACK_PROFILE:
         plt.figure()
         # subplot
+        signal_size = 3
         for i in range(signal_size):
             plt.subplot(signal_size, 1, i+1)
             attack_profile = attacker.get_attack_profile(signal_size=signal_size)
@@ -115,3 +156,21 @@ if __name__ == "__main__":
             plt.legend([f"signal {i}"])
     
     plt.show()
+
+def test_fdi_attack(configs):
+    attacker = FDI_attacker(configs=configs)
+    attacker.get_attack_profile(3)
+
+
+# main
+if __name__ == "__main__":
+    configs = configs
+    configs["attack_dense"] = 0.8
+    configs["resolution"] = 1000
+    configs["attack_type"] = "triangle"
+
+    # test_dos_attack(configs)
+    test_fdi_attack(configs)
+
+
+   

@@ -9,6 +9,7 @@ from utils.ResTOOL import Control,Objective
 import numpy as np
 
 from utils.attacker import DosAttacker
+from utils.attacker import FDI_attacker
 
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
@@ -52,7 +53,12 @@ from utils.attacker import configs
 configs["attack_type"] = "triangle"
 configs["attack_dense"] = 0.51
 configs["resolution"] = 100 # the resolution of the attack profile
-attacker = DosAttacker(configs=configs)
+# attacker = DosAttacker(configs=configs)
+configs["split_rate"] = 0.7
+configs["plot"] = False
+configs["power"] = 1.0
+attacker = FDI_attacker(configs=configs)
+attack_time = 5 # the time to start the attack
 
 # Initialize and train the network
 net = MyNeuralNetwork(path="./data/dodge/")
@@ -337,7 +343,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         speed_attacked_list.append(speed_attacked)
 
         # start attack at the time of 5s
-        if run_time < 150:
+        if run_time < attack_time:
             velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
             update_sphere_indicator(lead_car,0)
         else:
