@@ -14,11 +14,12 @@ class mCar:
         # spawn ego car
         world = client.get_world()
         # ego_bp = world.get_blueprint_library().find('vehicle.carlamotors.european_hgv')
-        # ego_bp = world.get_blueprint_library().find('vehicle.tesla.model3')
-        ego_bp = world.get_blueprint_library().find('vehicle.dodge.charger_2020')
+        ego_bp = world.get_blueprint_library().find('vehicle.bmw.grandtourer')
+        # ego_bp = world.get_blueprint_library().find('vehicle.dodge.charger_2020')
         # car_select=random.choice(['vehicle.carlamotors.european_hgv','vehicle.tesla.model3','vehicle.dodge.charger_2020'])
+        # print(car_select)
         # ego_bp = world.get_blueprint_library().find(car_select)
-        ego_bp.set_attribute('role_name',name)
+        # ego_bp.set_attribute('role_name',name)
 
         if spawn_point is None:
             spawn_points = world.get_map().get_spawn_points()
@@ -63,8 +64,12 @@ class mCar:
         # attach imu sensor, gnss sensor, collision sensor to the ego car
         imu_bp = world.get_blueprint_library().find('sensor.other.imu')
         # update rate is 30hz
-        imu_tf = carla.Transform()
-        self.imu = world.spawn_actor(imu_bp, imu_tf, attach_to=self.vehicle)
+        # imu_tf = carla.Transform()
+        # Define IMU sensor relative transform with respect to the vehicle's center of mass
+        imu_relative_transform = carla.Transform(carla.Location(x=0, y=0, z=1), carla.Rotation())
+
+        self.imu = world.spawn_actor(imu_bp, imu_relative_transform, attach_to=self.vehicle)
+        
 
         gnss_bp = world.get_blueprint_library().find('sensor.other.gnss')
         # update rate is 30hz
