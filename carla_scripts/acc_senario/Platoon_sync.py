@@ -206,7 +206,7 @@ if use_filter == "simple_low_pass":
     imu_data = [[0 for _ in range(2)] for i in range(len_of_platoon)]
 elif use_filter == "kalman":
     # define the params of Kalman filter
-    q_value = 0.01
+    q_value = 0.1
     r_value = 0.2
 
     Q = np.eye(2) * q_value
