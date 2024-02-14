@@ -20,6 +20,7 @@ from utils.visualizer import visualize_waypoint
 from utils.udp_server import send_custom_data
 from utils.controller import FeedForward_pid_Controller
 from utils.filter import CarlaIMULowPassFilter
+from utils.filter import KalmanFilterM
 from utils.neural_learner import MyNeuralNetwork
 
 # neural network
@@ -112,15 +113,11 @@ data_to_send = {
                 "filtered":{
                     "acceleration":{
                         "x":0.0,
-                        "y":0.0,
-                        "z":0.0,
                         },
-                    "gyro":{
+                    "velocity":{
                         "x":0.0,
-                        "y":0.0,
-                        "z":0.0,
                         },
-                            },
+                    },
                 }
             }
 
@@ -130,6 +127,7 @@ data_to_send = {
 # init_time = world.wait_for_tick().timestamp.platform_timestamp
 init_time = 0
 run_time = 0
+prev_run_time = 0
 
 
 # Spawn the lead vehicle
@@ -201,13 +199,26 @@ lead_car.set_global_plan(route_leader)
 lead_car.set_speed(80)
 
 # imu filter and imu data
-use_filter = "simple_low_pass"
+use_filter = "kalman"
 
 if use_filter == "simple_low_pass":
     imu_filter = [CarlaIMULowPassFilter(0.5) for i in range(len_of_platoon)]
-    imu_data = [[0 for _ in range(6)] for i in range(len_of_platoon)]
+    imu_data = [[0 for _ in range(2)] for i in range(len_of_platoon)]
 elif use_filter == "kalman":
-    pass
+    # define the params of Kalman filter
+    q_value = 0.01
+    r_value = 0.2
+
+    Q = np.eye(2) * q_value
+    R = np.eye(2) * r_value
+    P = np.eye(2) * 1000.
+    x = np.array([[0], [0]])
+    F = np.array([[1, 0.1], [0, 1]])
+    H = np.eye(2)
+    
+    # def __init__(self, x_init, F, H, P, R, Q):
+    imu_filter = [KalmanFilterM(x, F, H, P, R, Q) for i in range(len_of_platoon)]
+    imu_data = [[0 for _ in range(2)] for i in range(len_of_platoon)] # [acceleration, velocity]
 
 def update_sphere_indicator(vehicle,indicator):
     height_above_vehicle=2
@@ -247,26 +258,29 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
 
     # a simple low pass filter
     for i in range(len_of_platoon):
-        imu_filter[i].update(ego_car[i].imu_data)
-        imu_data[i] = imu_filter[i].state
+        global use_filter, prev_run_time
+        if use_filter == "simple_low_pass":
+            imu_filter[i].update([ego_car[i].imu_data.accelerometer.x, ego_car[i]._abs_velocity])
+            imu_data[i] = imu_filter[i].state
+        elif use_filter == "kalman":
+            imu_filter[i].kf.F[0, 1] = run_time - prev_run_time
+            prev_run_time = run_time
+            imu_filter[i].predict()
+            imu_filter[i].update([ego_car[i].imu_data.accelerometer.x, ego_car[i]._abs_velocity])
+            imu_data[i][0] = imu_filter[i].state[0]
+            imu_data[i][1] = imu_filter[i].state[1]
     # <<<<<<<<<<<<<<<<< filt <<<<<<<<<<<<<<<<<<<
 
     # >>>>>> send data to plotjuggler >>>>>>>>
     data_to_send["custom data"]["filtered"]["acceleration"]["x"] = imu_data[0][0]
-    data_to_send["custom data"]["filtered"]["acceleration"]["y"] = imu_data[0][1]
-    data_to_send["custom data"]["filtered"]["acceleration"]["z"] = imu_data[0][2]
+    data_to_send["custom data"]["filtered"]["velocity"]["x"] = imu_data[0][1]
 
-    data_to_send["custom data"]["filtered"]["gyro"]["x"] = imu_data[0][3]
-    data_to_send["custom data"]["filtered"]["gyro"]["y"] = imu_data[0][4]
-    data_to_send["custom data"]["filtered"]["gyro"]["z"] = imu_data[0][5]
     # <<<<<< send data to plotjuggler <<<<<<<<<
     [ego_car[i].update_state(None) for i in range(len_of_platoon)]
     acceleration_list=[imu_data[i][0] for i in range(len_of_platoon)]
     # acceleration_list=[ego_car[i].imu_data.accelerometer.x for i in range(len_of_platoon)]
     acceleration_lead=lead_car.imu_data.accelerometer.x
 
-
-    
     for i in range(len_of_platoon):
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
         data_to_send["custom2"]["acceleration without filtered"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x#ego_car[i]._acceleration.x
@@ -368,10 +382,6 @@ def loop_20ms_loop(loop_name="20ms loop"):
     # this loop is for MPC
     target_dist = 20
     return target_dist
-
-
-    
-
 
 # variables for the loop
 record_5ms = 0

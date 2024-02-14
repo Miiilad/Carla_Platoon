@@ -213,3 +213,7 @@ class mCar:
     @property
     def _location(self):
         return self.vehicle.get_location()
+    
+    @property
+    def _abs_velocity(self):
+        return math.sqrt(self._velocity.x**2 + self._velocity.y**2 + self._velocity.z**2)
