@@ -58,8 +58,11 @@ configs["attack_type"] = "triangle"
 configs["attack_dense"] = 0.51
 configs["resolution"] = 100 # the resolution of the attack profile
 # attacker = DosAttacker(configs=configs)
-configs["split_rate"] = 0.7
-configs["plot"] = False
+configs["M"] = 100
+configs["N"] = 10
+configs["E1"] = 5
+configs["E2"] = 10
+
 configs["power"] = 1.0
 attacker = FDI_attacker(configs=configs)
 attack_time = 5 # the time to start the attack
