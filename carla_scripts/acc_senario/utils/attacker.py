@@ -5,8 +5,12 @@ configs = {
     "attack_dense": 0.5,
     "seed_num": 200,
     "attack_type": "triangle",
-    "power": 1.0,
-    "split_rate": 0.7,
+
+    # for FDI attack
+    "M": 100,
+    "N": 10,
+    "E1": 5,
+    "E2": 10,
 
     "plot": True,
 }
@@ -24,6 +28,8 @@ class DosAttacker:
         '''
         for key, value in configs.items():
             setattr(self, key, value)
+        
+        self.attack_profile = None
 
     def get_attack_profile(self, signal_size = 1, seed_num = 200):
         if self.attack_type == "random":
@@ -45,62 +51,62 @@ class DosAttacker:
             temp = attack_profile > self.attack_dense
             # convert to numpy array
             attack_profile = np.array(temp, dtype = np.float64)
+            self.attack_profile = attack_profile
 
         return attack_profile
 
     def get_attacked_signal(self, signal, run_time, phase = 0, signal_size = 1):
         if self.attack_type == "random":
             n = (run_time % self.resolution)
-            temp_profile = self.get_attack_profile(signal_size=signal_size)
+            temp_profile = self.get_attack_profile(signal_size=signal_size) if self.attack_profile is None else self.attack_profile
             temp_profile = temp_profile[n+phase,:]
             signal = signal * temp_profile
         elif self.attack_type == "triangle":
             n = (run_time % self.resolution)
-            temp_profile = self.get_attack_profile(signal_size=signal_size)
+            temp_profile = self.get_attack_profile(signal_size=signal_size) if self.attack_profile is None else self.attack_profile
             temp_profile = temp_profile[n+phase,:]
             signal = signal * temp_profile
         return signal
 
 class FDI_attacker():
-    '''
-    FDI attacker:
-    1. Given a value of "power" of the attacker, the attack power can be reflected on this value.
-    2. numpy generate random seed to make sure the attack is random and we get the same result every time.
-    '''
+    """
+    Generate a sequence of length M of FDI attacks.
+    Parameters:
+    - M: The total length of the sequence.
+    - N: The window length within which the sum of absolute values of attacks must fall within [E1, E2].
+    - E1, E2: The lower and upper bounds for the sum of attacks' energies within any N consecutive steps.
+    Returns:
+    - A list containing the sequence of FDI attacks.
+    """
     def __init__(self, configs) -> None:
         for key, value in configs.items():
             setattr(self, key, value)
         
     def get_attack_profile(self, signal_size = 1, seed_num = 200):
         # gererate random numbers with size = (resolution, signal_size)
-        weights_profile = np.random.RandomState(seed_num).rand(self.resolution, signal_size)*(1-self.split_rate) + self.split_rate
-        sign_profile = np.random.RandomState(seed_num+1).rand(self.resolution, signal_size)-0.5
-        sign_profile = np.sign(sign_profile)
-        
-        self.attack_profile = weights_profile * sign_profile*self.power
+        # numpy random seed
+        np.random.seed(seed_num)
+        sequence = np.zeros((self.M, signal_size))
+        # Ensure the sum of the last N values falls within [E1, E2]
+        for i in range(self.M):
+            sequence[i,:] = np.random.uniform(-1, 1, signal_size)
+            # ensure the sum of the last N values falls within [E1, E2]
+            if i >= self.N-1:
+                # Calculate the sum of the absolute values  of the last N attacks
+                window_sum = np.sum(np.abs(sequence[i-self.N+1:i+1,:]), axis=0)
+                # Ajust the last attack values if the sum of the last N values falls outside [E1, E2]
+                for j in range(signal_size):
+                    while window_sum[j] < self.E1 or window_sum[j] > self.E2:
+                        sequence[i,j] = np.random.uniform(-1, 1)
+                        window_sum[j] = np.sum(np.abs(sequence[i-self.N+1:i+1,j]))
 
-        if self.plot:
-            plt.figure()
-            for i in range(signal_size):
-                x = np.linspace(0, self.resolution, self.resolution)
-                plt.subplot(signal_size, 1, i+1)
-                plt.scatter(x, self.attack_profile[:,i])
+        self.attack_profile = sequence
 
-                # grid legend
-                plt.grid()
-                plt.legend([f"signal {i}"])
-
-                # x,y axis
-                plt.xlim([0, self.resolution])
-                plt.ylim([-1.2, 1.2])
-            plt.show()
-
-        return self.attack_profile
-    
     def get_attacked_signal(self, signal, run_time, phase = 0, signal_size = 1):
         n = (run_time % self.resolution)
-        temp_profile = self.get_attack_profile(signal_size=signal_size)
-        temp_profile = temp_profile[n+phase,:]
+        if self.attack_profile is None:
+            self.get_attack_profile(signal_size=signal_size)
+        temp_profile =  self.attack_profile[n+phase,:]
         signal = signal + temp_profile
         return signal
 
@@ -158,9 +164,27 @@ def test_dos_attack(configs):
     plt.show()
 
 def test_fdi_attack(configs):
+    signal_size = 3
     attacker = FDI_attacker(configs=configs)
-    attacker.get_attack_profile(3)
+    attacker.get_attack_profile(signal_size=signal_size)
 
+    attack_profile = attacker.attack_profile
+    
+    # plot attack profile
+    plt.figure()
+    for i in range(signal_size):
+        plt.subplot(signal_size, 1, i+1)
+        plt.stairs(attack_profile[:,i], linewidth = 1.5)
+
+        # grid legend
+        plt.grid()
+        plt.legend([f"signal {i}"])
+
+        # x,y axis
+        plt.xlim([0, attacker.M])
+        plt.ylim([-1.2, 1.2])
+
+    plt.show()
 
 # main
 if __name__ == "__main__":
