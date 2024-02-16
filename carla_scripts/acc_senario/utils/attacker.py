@@ -81,6 +81,8 @@ class FDI_attacker():
     def __init__(self, configs) -> None:
         for key, value in configs.items():
             setattr(self, key, value)
+
+        self.attack_profile = None
         
     def get_attack_profile(self, signal_size = 1, seed_num = 200):
         # gererate random numbers with size = (resolution, signal_size)
