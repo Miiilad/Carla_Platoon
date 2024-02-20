@@ -37,7 +37,7 @@ if you want to see the example, you can use this(you can change it in the docker
 ros2 launch carla_ros_bridge carla_ros_bridge_with_example_ego_vehicle.launch.py host:='carla_server'
 ```
 ### Recorded Video  
-[![Video](pictures/scr.png)](https://streamable.com/e/fh5q84?nocontrols=1)
+[![Video](pictures/scr.png)](https://streamable.com/ogo7me)
 
 ### Visulization
 
