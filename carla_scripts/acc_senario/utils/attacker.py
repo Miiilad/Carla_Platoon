@@ -235,13 +235,16 @@ def test_fdi_attack(configs):
         plt.subplot(signal_size, 1, i+1)
         plt.stairs(attack_profile[:,i], linewidth = 1.5)
 
+        max_y = max(attack_profile[:,i])
+        min_y = min(attack_profile[:,i])
+
         # grid legend
         plt.grid()
         plt.legend([f"signal {i}"])
 
         # x,y axis
         plt.xlim([0, attacker.M])
-        plt.ylim([-1.2, 1.2])
+        plt.ylim([min_y-0.2, max_y+0.2])
 
     plt.show()
 
