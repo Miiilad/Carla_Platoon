@@ -11,6 +11,7 @@ configs = {
     "N": 10,
     "E1": 5,
     "E2": 10,
+    "window_length": 10,
 
     "plot": True,
 }
@@ -67,42 +68,98 @@ class DosAttacker:
             temp_profile = temp_profile[n+phase,:]
             signal = signal * temp_profile
         return signal
+    
+def check_sum_of_squares(numbers, Umin, Umax, N, verbose=False):
+    # N is the size of the sliding window
+    for i in range(len(numbers) - N + 1):
+        window_sum = np.sum(np.square(numbers[i:i+N]))
+        if not (Umin <= window_sum <= Umax):
+            if verbose:
+                print(f"Sum of squares {window_sum} not within [{Umin}, {Umax}] at index {i}")
+            if window_sum < Umin:
+                return "Low"
+            else:
+                return "High"
+
+    if verbose:      
+        print("All windows satisfy the condition")
+    return "done"
+
+def generate_attacks(total_numbers:int, sliding_window:int, Upper_bound:int, Lower_bound:int, seed:int)->list:
+    # Random seed
+    n = seed
+    # Scale factor for the Gaussian distribution
+    scaler = 1
+
+    np.random.seed(seed=n)
+    valid_numbers = np.random.normal(0, scaler, sliding_window).tolist()
+
+    while check_sum_of_squares(valid_numbers, Lower_bound, Upper_bound, sliding_window) != "done":
+        if check_sum_of_squares(valid_numbers, Lower_bound, Upper_bound, sliding_window) == "Low":
+            scaler = scaler_up(scaler)
+        else:
+            scaler = scaler_down(scaler)
+        valid_numbers = np.random.normal(0, scaler, sliding_window).tolist()
+        
+
+    # Generate Gaussian distributed numbers
+    while len(valid_numbers) < total_numbers:
+        np.random.seed(n)
+        n += 1
+        # extend the list with one more number
+        valid_numbers.append(np.random.normal(0, scaler))
+        while check_sum_of_squares(valid_numbers, Lower_bound, Upper_bound, sliding_window) != "done":
+            if check_sum_of_squares(valid_numbers, Lower_bound, Upper_bound, sliding_window) == "Low":
+                scaler = scaler_up(scaler)
+            else:
+                scaler = scaler_down(scaler)
+            valid_numbers[-1] = np.random.normal(0, scaler)
+
+    return valid_numbers
+
+def scaler_up(scaler):
+    return scaler * 1.1
+
+def scaler_down(scaler):
+    return scaler * 0.9
 
 class FDI_attacker():
     """
     Generate a sequence of length M of FDI attacks.
-    Parameters:
+    Config parameters:
     - M: The total length of the sequence.
     - N: The window length within which the sum of absolute values of attacks must fall within [E1, E2].
     - E1, E2: The lower and upper bounds for the sum of attacks' energies within any N consecutive steps.
+    - window_length: The length of the sliding window.
     Returns:
     - A list containing the sequence of FDI attacks.
+
+    I want to generate a sequence of length M of FDI attacks. Within the sliding window of length N, the sum of square of values of attacks must fall within [E1, E2]. 
+    I want to ensure that the sum of the absolute values of the last N attacks falls within [E1, E2]. 
+    I want to generate random numbers with size = (resolution, signal_size). 
+    I want to ensure the sum of the last N values falls within [E1, E2]. 
+    I want to adjust the last attack values if the sum of the last N values falls outside [E1, E2].
     """
     def __init__(self, configs) -> None:
         for key, value in configs.items():
             setattr(self, key, value)
 
         self.attack_profile = None
-        
-    def get_attack_profile(self, signal_size = 1, seed_num = 200):
-        # gererate random numbers with size = (resolution, signal_size)
-        # numpy random seed
-        np.random.seed(seed_num)
-        sequence = np.zeros((self.M, signal_size))
-        # Ensure the sum of the last N values falls within [E1, E2]
-        for i in range(self.M):
-            sequence[i,:] = np.random.uniform(-1, 1, signal_size)
-            # ensure the sum of the last N values falls within [E1, E2]
-            if i >= self.N-1:
-                # Calculate the sum of the absolute values  of the last N attacks
-                window_sum = np.sum(np.abs(sequence[i-self.N+1:i+1,:]), axis=0)
-                # Ajust the last attack values if the sum of the last N values falls outside [E1, E2]
-                for j in range(signal_size):
-                    while window_sum[j] < self.E1 or window_sum[j] > self.E2:
-                        sequence[i,j] = np.random.uniform(-1, 1)
-                        window_sum[j] = np.sum(np.abs(sequence[i-self.N+1:i+1,j]))
 
-        self.attack_profile = sequence
+    def get_attack_profile(self, signal_size = 1, seed_num = 200):
+        N = self.window_length
+        Umin = self.E1
+        Umax = self.E2
+        total_length = self.resolution
+        n = self.seed_num
+
+        self.attack_profile = np.zeros((total_length, signal_size))
+
+        # generate profiles
+        for i in range(signal_size):
+            temp = generate_attacks(total_length, N, Umax, Umin, n)
+            print(check_sum_of_squares(temp, Umin, Umax, N, verbose=True))
+            self.attack_profile[:,i] = temp
 
     def get_attacked_signal(self, signal, run_time, phase = 0, signal_size = 1):
         n = (run_time % self.resolution)
