@@ -9,8 +9,8 @@ configs = {
     # for FDI attack
     "M": 100,
     "N": 10,
-    "E1": 5,
-    "E2": 10,
+    "E1": 50,
+    "E2": 100,
     "window_length": 10,
 
     "plot": True,
@@ -248,8 +248,7 @@ def test_fdi_attack(configs):
 
     plt.show()
 
-# main
-if __name__ == "__main__":
+
     configs = configs
     configs["attack_dense"] = 0.8
     configs["resolution"] = 1000
