@@ -63,7 +63,7 @@ class FeedForward_pid_Controller:
             brake = 0
         else:
             throttle = 0
-            brake = saturate(-0.005*value) 
+            brake = saturate(-value) 
         return throttle, brake
     
     def unsat_control(self, input):
@@ -75,3 +75,15 @@ class FeedForward_pid_Controller:
         value = pid_gain + feed_fowward_gain
 
         return value
+    
+    def control_unmix(self, input):
+
+        value = input
+  
+        if value>=0:
+            throttle = saturate(value)
+            brake = 0
+        else:
+            throttle = 0
+            brake = saturate(-value) 
+        return throttle, brake

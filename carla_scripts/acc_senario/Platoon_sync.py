@@ -8,6 +8,8 @@ import time,random
 from utils.ResTOOL import Control,Objective
 import numpy as np
 
+from utils.attacker import DosAttacker
+from utils.attacker import FDI_attacker
 
 sys.path.append('/opt/carla/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
@@ -19,6 +21,7 @@ from utils.visualizer import visualize_waypoint
 from utils.udp_server import send_custom_data
 from utils.controller import FeedForward_pid_Controller
 from utils.filter import CarlaIMULowPassFilter
+from utils.filter import KalmanFilterM
 from utils.neural_learner import MyNeuralNetwork
 
 # neural network
@@ -39,14 +42,29 @@ world = client.load_world("Town04_Opt")
 settings = world.get_settings()
 # sychronous mode
 settings.synchronous_mode = True
-fixed_delta_seconds = 1/100 # 200Hz
+fixed_delta_seconds = 1/200 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 1,'save_data':1, 'load_model':1, 'train_model': 1, 'save_model':1,'run_simulation': 0,  'random_spawn':0}
+setting={"CBF" : 1,'save_data':0, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':0}
+
+# attacker
+from utils.attacker import configs
+configs["attack_type"] = "triangle"
+configs["attack_dense"] = 0.51
+configs["resolution"] = 100 # the resolution of the attack profile
+# attacker = DosAttacker(configs=configs)
+configs["M"] = 100
+configs["N"] = 10
+configs["E1"] = 5
+configs["E2"] = 10
+
+configs["power"] = 1.0
+attacker = FDI_attacker(configs=configs)
+attack_time = 5 # the time to start the attack
 
 # Initialize and train the network
-net = MyNeuralNetwork()
+net = MyNeuralNetwork(path="./data/dodge/")
 if setting["load_model"]:net.load_model()
 if setting["train_model"]:net.train_network()
 if setting["save_model"]: net.save_model()
@@ -60,6 +78,7 @@ world.apply_settings(settings)
 spawn_points = world.get_map().get_spawn_points()
 if setting["random_spawn"]:spawn_point = random.choice(spawn_points)
 else:spawn_point = spawn_points[90]
+
 # get the map
 town_map = world.get_map()
 roads = town_map.get_topology()
@@ -81,6 +100,9 @@ end_point = carla.Transform(carla.Location(x=900.665466, y=200.541804, z=1.72034
 # for plotjuggler
 data_to_send = {
                 "timestamp": 0,
+                "custom2":{
+                    "acceleration without filtered":{}
+                },
                 "custom data":{
                 "acceleration":{"x":0.0,
                                 "y":0.0,
@@ -100,22 +122,21 @@ data_to_send = {
                 "filtered":{
                     "acceleration":{
                         "x":0.0,
-                        "y":0.0,
-                        "z":0.0,
                         },
-                    "gyro":{
+                    "velocity":{
                         "x":0.0,
-                        "y":0.0,
-                        "z":0.0,
                         },
-                            }
+                    },
                 }
             }
+
+
 
 # record the running time
 # init_time = world.wait_for_tick().timestamp.platform_timestamp
 init_time = 0
 run_time = 0
+prev_run_time = 0
 
 
 # Spawn the lead vehicle
@@ -172,7 +193,9 @@ route_leader = grp.trace_route(start_point_2.location, end_point.location)
 #     vehicle.set_autopilot(True)
 
 # visualize the route for leader
-visualize_waypoint(client, route_leader, sampling_resolution)
+#comment if not required
+#visualize_waypoint(client, route_leader, sampling_resolution)
+
 # # visualize the route
 # visualize_waypoint(client, route_ego, sampling_resolution)
 
@@ -182,16 +205,44 @@ for i in range(len_of_platoon):
 lead_car.set_global_plan(route_leader)
 
 # set the speed of the lead car 
-lead_car.set_speed(50)
+lead_car.set_speed(80)
 
 # imu filter and imu data
-use_filter = "simple_low_pass"
+use_filter = "kalman"
 
 if use_filter == "simple_low_pass":
-    imu_filter = CarlaIMULowPassFilter(0.5)
-    imu_data = [0 for _ in range(6)]
+    imu_filter = [CarlaIMULowPassFilter(0.5) for i in range(len_of_platoon)]
+    imu_data = [[0 for _ in range(2)] for i in range(len_of_platoon)]
 elif use_filter == "kalman":
-    pass
+    # define the params of Kalman filter
+    q_value = 0.1
+    r_value = 0.2
+
+    Q = np.eye(2) * q_value
+    R = np.eye(2) * r_value
+    P = np.eye(2) * 1000.
+    x = np.array([[0], [0]])
+    F = np.array([[1, 0.1], [0, 1]])
+    H = np.eye(2)
+    
+    # def __init__(self, x_init, F, H, P, R, Q):
+    imu_filter = [KalmanFilterM(x, F, H, P, R, Q) for i in range(len_of_platoon)]
+    imu_data = [[0 for _ in range(2)] for i in range(len_of_platoon)] # [acceleration, velocity]
+
+def update_sphere_indicator(vehicle,indicator):
+    height_above_vehicle=2
+    sphere_size=0.1
+    vehicle_location = vehicle._location
+    sphere_location = carla.Location(vehicle_location.x, vehicle_location.y, vehicle_location.z + height_above_vehicle)
+    
+    # Example mode determination based on speed (you can replace this with your own logic)
+    if indicator:  # Example threshold for changing color
+        color = carla.Color(255, 0, 0)  # Green for slow speed
+    else:
+        color = carla.Color(0, 255, 0)  # Red for high speed
+    
+    # Draw the sphere
+    world.debug.draw_point(sphere_location, size=sphere_size, color=color, life_time=0.4, persistent_lines=False)
 
 # camera
 def loop_5ms_loop(loop_name="5ms loop", run_time=None):
@@ -215,27 +266,33 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # >>>>>>>>>>>>>>>>> filt >>>>>>>>>>>>>>>>>>
 
     # a simple low pass filter
-    imu_filter.update(ego_car[0].imu_data)
-    imu_data = imu_filter.state
+    for i in range(len_of_platoon):
+        global use_filter, prev_run_time
+        if use_filter == "simple_low_pass":
+            imu_filter[i].update([ego_car[i].imu_data.accelerometer.x, ego_car[i]._abs_velocity])
+            imu_data[i] = imu_filter[i].state
+        elif use_filter == "kalman":
+            imu_filter[i].kf.F[0, 1] = run_time - prev_run_time
+            prev_run_time = run_time
+            imu_filter[i].predict()
+            imu_filter[i].update([ego_car[i].imu_data.accelerometer.x, ego_car[i]._abs_velocity])
+            imu_data[i][0] = imu_filter[i].state[0]
+            imu_data[i][1] = imu_filter[i].state[1]
     # <<<<<<<<<<<<<<<<< filt <<<<<<<<<<<<<<<<<<<
 
     # >>>>>> send data to plotjuggler >>>>>>>>
-    data_to_send["custom data"]["filtered"]["acceleration"]["x"] = imu_data[0]
-    data_to_send["custom data"]["filtered"]["acceleration"]["y"] = imu_data[1]
-    data_to_send["custom data"]["filtered"]["acceleration"]["z"] = imu_data[2]
+    data_to_send["custom data"]["filtered"]["acceleration"]["x"] = imu_data[0][0]
+    data_to_send["custom data"]["filtered"]["velocity"]["x"] = imu_data[0][1]
 
-    data_to_send["custom data"]["filtered"]["gyro"]["x"] = imu_data[3]
-    data_to_send["custom data"]["filtered"]["gyro"]["y"] = imu_data[4]
-    data_to_send["custom data"]["filtered"]["gyro"]["z"] = imu_data[5]
     # <<<<<< send data to plotjuggler <<<<<<<<<
     [ego_car[i].update_state(None) for i in range(len_of_platoon)]
-    acceleration_list=[ego_car[i].imu_data.accelerometer.x for i in range(len_of_platoon)]
+    acceleration_list=[imu_data[i][0] for i in range(len_of_platoon)]
+    # acceleration_list=[ego_car[i].imu_data.accelerometer.x for i in range(len_of_platoon)]
     acceleration_lead=lead_car.imu_data.accelerometer.x
 
-
-    
     for i in range(len_of_platoon):
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
+        data_to_send["custom2"]["acceleration without filtered"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x#ego_car[i]._acceleration.x
 
 
     return acceleration_list,acceleration_lead
@@ -251,16 +308,17 @@ def inner_control_loop(loop_name="10ms loop", target_distance=10):
         #     brake=input_acceleration[i]
         #     throttle=0
         acceleration_error =  input_acceleration[i]-acceleration_list[i]
-        throttle,brake = controller_inner[i].control(acceleration_error)
+        throttle,brake = controller_inner[i].control_unmix(input_acceleration[i])
         done = ego_car[i].lp_control_run_step(brake = brake, throttle=throttle)
         # target_location = ego_car[i].vehicle.get_transform().location
 
     # print(f"distance error: {distance_error}")
-    data_to_send["custom data"]["throttle"] = throttle
+        data_to_send["custom data"]["throttle{}".format(i)] = throttle
+        data_to_send["custom data"]["brake{}".format(i)] = brake
     data_to_send["custom data"]["target_dist"] = target_distance
     # data_to_send["custom data"]["distance"] = distance
-    data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
-    data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
+    data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
+    data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0].get_speed()
 
     return done
 
@@ -269,10 +327,11 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
 
     # world.tick()
     location_front_vehicle = lead_car.vehicle.get_transform().location
-    velocity_front_vehicle = lead_car._velocity.x
+    velocity_front_vehicle = lead_car.get_speed()
     acceleration_front_vehicle = acceleration_lead
-    x_next_prediction_list=[]
+    x_next_prediction_nom_list=[]
     x_list=[]
+    speed_attacked_list = []
     
     
     for i in range(len_of_platoon):
@@ -281,41 +340,57 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         distance_error =  distance - target_distance 
         
         #Velocity relative
-        velocity_error = velocity_front_vehicle - ego_car[i]._velocity.x
+        # velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
+
+        speed_attacked = attacker.get_attacked_signal(ego_car[i].get_speed(), int(run_time*100))
+        speed_attacked_list.append(speed_attacked)
+
+        # start attack at the time of 5s
+        if run_time < attack_time:
+            velocity_error = velocity_front_vehicle - ego_car[i].get_speed()
+            update_sphere_indicator(lead_car,0)
+        else:
+            print("Attacked!")
+            velocity_error = velocity_front_vehicle - speed_attacked
+            update_sphere_indicator(lead_car,1)
+
         x = np.array([distance_error,velocity_error,acceleration_list[i]])
-        input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle, u_lim)
+        #Calculate control
+        input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle,u_pre_list[i], u_lim)#+3*np.sin(5*run_time+(i+1)*2)
+        # record u for next step: it willl be needed for control value calculation
+        u_pre_list[i] = input_acceleration[i]
 
         #Record samples for learning
         x_list.append(x)
-        x_next_prediction_list.append(Controller_mpc[i].eval_nominal(x, input_acceleration[i],acceleration_front_vehicle))
+        x_next_prediction_nom_list.append(Controller_mpc[i].eval_nominal(x, input_acceleration[i],acceleration_front_vehicle))
+        x_next_prediction_net=net.evaluate(x, input_acceleration[i]).reshape(3)
 
         #Calculate the safe control through optimization
         if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x,input_acceleration[i],acceleration_front_vehicle,u_lim)
         
         # print(">>>>",i, input_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
-        velocity_front_vehicle = ego_car[i]._velocity.x
+        velocity_front_vehicle = ego_car[i].get_speed()
         acceleration_front_vehicle = acceleration_list[i]
         
 
     # print(f"distance error: {distance_error}")
     for i in range(len_of_platoon):
         data_to_send["custom data"]["acceleration"]["target{}:x".format(i)] = input_acceleration[i]
-    data_to_send["custom data"]["throttle"] = throttle
+        data_to_send["custom data"]["ego_car_speed{}".format(i)] = ego_car[i].get_speed()
+        data_to_send["custom data"]["distance_error{}".format(i)] = x_list[i][0]
+        data_to_send["custom data"]["speed attacked{}".format(i)] = float(speed_attacked_list[i])
     data_to_send["custom data"]["target_dist"] = target_distance
-    data_to_send["custom data"]["distance"] = distance
-    data_to_send["custom data"]["lead_car_speed"] = lead_car._velocity.x
-    data_to_send["custom data"]["ego_car[0]_speed"] = ego_car[0]._velocity.x
+    data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
+    
 
-    return done, input_acceleration, x_list, x_next_prediction_list
+    return done, input_acceleration, x_list, x_next_prediction_nom_list,x_next_prediction_net
 
 
 def loop_20ms_loop(loop_name="20ms loop"):
     # this loop is for MPC
     target_dist = 20
     return target_dist
-    
-
 
 # variables for the loop
 record_5ms = 0
@@ -330,21 +405,18 @@ target_vel = 0
 target_dist = 0
 
 #For Longitudinal control
-# controller=[FeedForward_pid_Controller(kp=5,ki=0,kd=50) for i in range(len_of_platoon)]
 controller_inner=[FeedForward_pid_Controller(kp=100,ki=10,kd=60) for i in range(len_of_platoon)]
-# controller_inner=[FeedForward_pid_Controller(kp=10,ki=1,kd=60) for i in range(len_of_platoon)]
-# controller_inner=[FeedForward_pid_Controller(kp=100,ki=0.1,kd=1) for i in range(len_of_platoon)]
-# controller_outer=[FeedForward_pid_Controller(kp=5,ki=0,kd=60) for i in range(len_of_platoon)]
+
 # To characterise the performance measure
-R = np.diag([5])
-Q = np.diag([10, 1, 0])
+R = np.diag([50])
+Q = np.diag([10, 5, 0.1])
 Objective = Objective(Q, R)
 
 # Define the controller
-h=0.05
-prediction_H = 10
-control_H = 5
-u_lim= [-70,70]
+h=0.1
+prediction_H = 20
+control_H = 10
+u_lim= [-1,1]
 Controller_mpc = [Control(h, prediction_H, control_H, Objective) for i in range(len_of_platoon)]
 acceleration_list=[0]*len_of_platoon
 acceleration_lead=0
@@ -352,7 +424,7 @@ input_acceleration=[0]*len_of_platoon
 data_collected_input = []
 data_collected_output = []
 x_list_previous = []
-
+u_pre_list=np.zeros(len_of_platoon)
 
 
 
@@ -373,8 +445,8 @@ while True:
 
 
     # >>>>>>>>>>>>>>>>>> run the loop >>>>>>>>>>>>>>>>>>
-    if run_time - record_5ms >= 0.01:
-        acceleration_list,accleration_lead=loop_5ms_loop(run_time=run_time)
+    if run_time - record_5ms >= 0.005:
+        acceleration_list,acceleration_lead=loop_5ms_loop(run_time=run_time)
         record_5ms = run_time
     
     if run_time - record_20ms >= 0.2:
@@ -383,11 +455,9 @@ while True:
         record_20ms = run_time
 
 
-    if run_time - record_outer >= 0.05:
+    if run_time - record_outer >= 0.1:
         # loop for speed control
-        done,input_acceleration, x_list, x_next_prediction_list = outer_control_loop(target_distance=target_dist, run_time=run_time)
-        if run_time<2:
-            input_acceleration=[50]*len_of_platoon
+        done,input_acceleration, x_list, x_next_prediction_nom_list,x_next_prediction_net = outer_control_loop(target_distance=target_dist, run_time=run_time)
 
         x_observed=x_list
         if len(x_list_previous) > 0:
@@ -398,14 +468,15 @@ while True:
                     output= x_observed[i] - x_prediction[i]
                     data_collected_input.append(input)
                     data_collected_output.append(output)
-                    print(input)
+                    # print("obsreved",x_observed[i]-x_prediction[i],x_observed[i]-x_prediction_net-x_prediction[i])
                 else:
                     print(i,'th: TOO CLOSE!')
 
                     
         x_list_previous = x_list
         u_implemented = input_acceleration
-        x_prediction = x_next_prediction_list 
+        x_prediction = x_next_prediction_nom_list 
+        x_prediction_net = x_next_prediction_net
 
         record_outer = run_time
 

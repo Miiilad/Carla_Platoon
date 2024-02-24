@@ -9,12 +9,12 @@ import numpy as np
 # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
 
 class MyNeuralNetwork(nn.Module):
-    def __init__(self,n=3,nh=10):
+    def __init__(self,path="./data/",n=3):
         # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
         # n = 3  # example value for n
         # nh = 10  # example value for nh
-        nh1=50
-        nh2=25
+        nh1=100
+        nh2=50
         super(MyNeuralNetwork, self).__init__()
         self.layer1 = nn.Linear(n + 1, nh1)
         self.layer2 = nn.Linear(nh1, nh2)
@@ -28,7 +28,7 @@ class MyNeuralNetwork(nn.Module):
         #Data saver class instances
         #Data saver class 
         self.filename="input-output"
-        self.path="./data/"
+        self.path=path
         self.DataSaver_io= DataSaver(self.path,self.filename)
 
     def forward(self, x, u):
@@ -100,7 +100,7 @@ class MyNeuralNetwork(nn.Module):
         x, u, y_actual = self.load_and_slice_training_data()
         x_train, x_val, u_train, u_val, y_train, y_val = train_test_split(
             x, u, y_actual, test_size=0.2, random_state=30)
-        epochs = 4 * len(x)
+        epochs = 3 * len(x)
         for epoch in range(epochs):
             self.optimizer.zero_grad()
             y_pred = self(x_train, u_train)

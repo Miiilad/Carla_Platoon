@@ -34,9 +34,10 @@ class Control():
         self.x_predict_sequence=[]
         self.u_pre = 0.0
 
-    def calculate(self, x,v_dot_lead, u_lim):
+    def calculate(self, x,v_dot_lead,u_pre, u_lim):
         self.xp = np.copy(x)
         self.v_dot_lead=v_dot_lead
+        self.u_pre=u_pre.reshape(self.dim_m,1)
 
         #################
         m = gp.Model("qp")
@@ -112,7 +113,7 @@ class Control():
         return u
     def eval_nominal(self,x,u,v_dot_lead):
         x=np.array(x)
-        x_next=self.Ad @ x + (self.Bd * u + self.Hd * v_dot_lead).flatten()
+        x_next=(self.Ad @ x).reshape(self.dim_n,1) + (self.Bd * u + self.Hd * v_dot_lead)
         return x_next
     def opt_obj(self, Up):
         self.Objective.resetSum()
@@ -125,9 +126,12 @@ class Control():
         return self.Objective.sum
 
     def opt_obj_mat(self, Xp, Up):
+        u_rate_weight= 100 * self.Objective.R
         o1 = (Xp.T @ self.Objective.Q @ Xp)
         o2 = (Up.T @ self.Objective.R @ Up)
-        obj = sum([o1[i, i] + o2[i, i] for i in range(self.p_H)])
+        o3 = (Up[:,1:].T - Up[:,:-1].T)  @ u_rate_weight @ (Up[:,1:] - Up[:,:-1]) 
+        o4 = (Up[:,0].T - self.u_pre.T)  @ u_rate_weight @ (Up[:,0] - self.u_pre)
+        obj = sum([o1[i, i] + o2[i, i] for i in range(self.p_H)])+sum([o3[i, i] for i in range(self.c_H)])+o4
         return obj
 
     def opt_const_mat(self, m, Xp, Up):
@@ -150,7 +154,7 @@ class Control():
     def Safe_Control(self,net,x,u,v_dot_lead,u_lim):
         m = gp.Model("qp")
         # m.params.NonConvex = 2
-        Us = m.addMVar(shape=(self.dim_m, self.dim_m), lb=list(u_lim[0]*np.ones((self.dim_m, self.dim_m))),
+        Us = m.addMVar(shape=(self.dim_m, 1), lb=list(u_lim[0]*np.ones((self.dim_m, self.dim_m))),
                        ub=list(u_lim[1]*np.ones((self.dim_m, self.dim_m))), name="U")
         
         # Define the objective function
@@ -158,20 +162,26 @@ class Control():
         m.Params.LogToConsole = 0
         m.Params.FeasibilityTol = 1e-3
         m.setObjective(objective, GRB.MINIMIZE)
-        etta = 0.2
+        etta = 0.6
 
         y=net.evaluate(x,u)
         bx,ax = net.partial_derivative_u(x)
         # print(" NN:",y)
         # print("Gradient:", bx,ax)
         # print("a(x)+b(x)u:", ax+bx*u,'\n')
+        f_bar = self.eval_nominal(x,Us,v_dot_lead)#+ ax+bx @ Us
 
-        f_bar = self.eval_nominal(x,u,v_dot_lead)
-        f_bar=np.array(f_bar).reshape(self.dim_n,1)
+        # f_bar=np.array(f_bar).reshape(self.dim_n,1)
         Bx=self.BF(x)
-        Bx_next=self.BF(f_bar+ ax+bx @ Us)
+        #commented for now
+        # Bx_next=self.BF(f_bar+ ax+bx @ Us)
+        # Bx_next=self.BF(f_bar+ 0*ax+0*bx @ Us)
+        x_dot=1/self.h*(f_bar-x.reshape(self.dim_n,1))
+        # print(self.barrier_higher_degree(x,x_dot,v_dot_lead))
+    
 
-        m.addConstr(Bx_next -Bx >= -etta * Bx, "constraint")
+        # m.addConstr(Bx_next -Bx >= -etta * Bx, "constraint")
+        m.addConstr(self.barrier_higher_degree(x,x_dot,v_dot_lead) >= 0, "constraint")
 
         try:
             # Solve the model
@@ -188,8 +198,11 @@ class Control():
 
 
     def BF(self,x):
+        '''
+        barrier function
+        '''
         W=np.diag([1,0,0.1])
-        C=6
+        C=3
         if isinstance(x, np.ndarray):
             out = C**2 - x.T @ W @ x  
         else:
@@ -199,6 +212,25 @@ class Control():
             # Define the complete expression
             out = C**2 - quad_expr  # Assuming C is a constant 
         return out
+    
+    def barrier_higher_degree(self,x,x_dot,v_dot_lead):
+        d_th=5
+        
+        dd=x[0]
+        dv=x[1]
+        a=x[2]
+        
+        dv_dot=v_dot_lead-a
+        a_dot=x_dot[2]
+        
+        k1,k2,k3=[0.005,0.003,0.001]
+        
+        phi0=d_th**2-dd**2
+        phi1=-2*dv*dd + k1*phi0
+        phi2=-2*dv_dot*dd-2*dv**2+k2*phi1
+        phi3=2*a_dot*dd-2*dv_dot*dv-4*dv_dot*dv+k3*phi2
+        
+        return phi3
 
 
 class Objective():
