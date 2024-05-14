@@ -1,4 +1,4 @@
-# start
+# Modeling and Control Approach for Platooning with Safety Guarantees
 
 First, you should build the project, you can build the project offline or pull the image online:
 
