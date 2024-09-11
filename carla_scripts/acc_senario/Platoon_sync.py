@@ -24,6 +24,7 @@ from utils.controller import FeedForward_pid_Controller
 from utils.filter import CarlaIMULowPassFilter
 from utils.filter import KalmanFilterM
 from utils.neural_learner import MyNeuralNetwork
+import torch
 
 # pandas
 df = pd.DataFrame(columns=['time stamp', 'acceleration', 'yaw get_transform', 'yaw2'])
@@ -50,7 +51,7 @@ fixed_delta_seconds = 1/200 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 1,'save_data':0, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':0}
+setting={"CBF" : 0,'save_data':0, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':0}
 
 # attacker
 from utils.attacker import configs
@@ -297,7 +298,9 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     # acceleration_list=[ego_car[i].imu_data.accelerometer.x for i in range(len_of_platoon)]
     acceleration_lead=lead_car.imu_data.accelerometer.x
 
+    x_k_list = []
     for i in range(len_of_platoon):
+        x_k_list.append(np.array([0, ego_car[i].get_speed(),imu_data[i][0]])) 
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
         data_to_send["custom2"]["acceleration without filtered"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x#ego_car[i]._acceleration.x
         # get the yaw angle of the vehicle
@@ -309,11 +312,12 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
         df.loc[len(df)] = [run_time, ego_car[i].imu_data.accelerometer.x, ego_car[i].vehicle.get_transform().rotation.yaw, ego_car[i].imu_data.compass]
 
 
-    return acceleration_list,acceleration_lead
+
+    return acceleration_list,acceleration_lead,x_k_list
 
   
 
-def inner_control_loop(loop_name="10ms loop", target_distance=10):
+def inner_control_loop(x_k_list,loop_name="10ms loop", target_distance=10):
     for i in range(len_of_platoon):
         # if input_acceleration[i]>=0:
         #     brake=0
@@ -322,6 +326,12 @@ def inner_control_loop(loop_name="10ms loop", target_distance=10):
         #     brake=input_acceleration[i]
         #     throttle=0
         acceleration_error =  input_acceleration[i]-acceleration_list[i]
+        u_e_k = input_acceleration[i]
+        x_k = x_k_list[i]
+        A_d = Controller_mpc[i].Ad
+        B_d = Controller_mpc[i].Bd
+        # u_h_k = net.compute_u_h(x_k,u_e_k,A_d,B_d,h,h)
+        # print("th , br",controller_inner[i].control_unmix(u_h_k))
         throttle,brake = controller_inner[i].control_unmix(input_acceleration[i])
         done = ego_car[i].lp_control_run_step(brake = brake, throttle=throttle)
         # target_location = ego_car[i].vehicle.get_transform().location
@@ -368,7 +378,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
             velocity_error = velocity_front_vehicle - speed_attacked
             update_sphere_indicator(lead_car,1)
 
-        x = np.array([distance_error,velocity_error,acceleration_list[i]])
+        x = np.array([distance_error,velocity_error,acceleration_list[i]],dtype=object)
         #Calculate control
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle,u_pre_list[i], u_lim)#+3*np.sin(5*run_time+(i+1)*2)
         # record u for next step: it willl be needed for control value calculation
@@ -377,7 +387,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         #Record samples for learning
         x_list.append(x)
         x_next_prediction_nom_list.append(Controller_mpc[i].eval_nominal(x, input_acceleration[i],acceleration_front_vehicle))
-        x_next_prediction_net=net.evaluate(x, input_acceleration[i]).reshape(3)
+        x_next_prediction_net=net.evaluate(x, input_acceleration[i])
 
         #Calculate the safe control through optimization
         if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x,input_acceleration[i],acceleration_front_vehicle,u_lim)
@@ -460,11 +470,11 @@ while True:
 
     # >>>>>>>>>>>>>>>>>> run the loop >>>>>>>>>>>>>>>>>>
     if run_time - record_5ms >= 0.005:
-        acceleration_list,acceleration_lead=loop_5ms_loop(run_time=run_time)
+        acceleration_list,acceleration_lead,x_k_list=loop_5ms_loop(run_time=run_time)
         record_5ms = run_time
     
     if run_time - record_20ms >= 0.2:
-        # outer loop for MPC
+        # Distance Planner
         target_dist = loop_20ms_loop()
         record_20ms = run_time
 
@@ -481,7 +491,7 @@ while True:
                     input = np.append(x_list_previous[i],u_implemented[i])
                     output= x_observed[i] - x_prediction[i]
                     data_collected_input.append(input)
-                    data_collected_output.append(output)
+                    data_collected_output.append(output[2])
                     # print("obsreved",x_observed[i]-x_prediction[i],x_observed[i]-x_prediction_net-x_prediction[i])
                 else:
                     print(i,'th: TOO CLOSE!')
@@ -497,7 +507,7 @@ while True:
 
     if run_time - record_inner >= 0.01:
         # inner loop for speed control
-        done = inner_control_loop(target_distance=target_dist)
+        done = inner_control_loop(x_k_list,target_distance=target_dist)
         record_inner = run_time
     
 

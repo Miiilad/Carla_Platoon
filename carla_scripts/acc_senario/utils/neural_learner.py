@@ -9,17 +9,28 @@ import numpy as np
 # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
 
 class MyNeuralNetwork(nn.Module):
-    def __init__(self,path="./data/",n=3):
+    def __init__(self,path="./data/",n=3, nh1=20, nh2=20, output_dim=1):
         # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
         # n = 3  # example value for n
         # nh = 10  # example value for nh
-        nh1=100
-        nh2=50
         super(MyNeuralNetwork, self).__init__()
-        self.layer1 = nn.Linear(n + 1, nh1)
-        self.layer2 = nn.Linear(nh1, nh2)
-        self.output_layer = nn.Linear(nh2, n)
-        self.elu = nn.ELU()
+        # Define the neural network for f(x)
+        self.f_network = nn.Sequential(
+            nn.Linear(n, nh1),
+            nn.ReLU(),
+            nn.Linear(nh1, nh2),
+            nn.ReLU(),
+            nn.Linear(nh2, output_dim)
+        )
+        
+        # Define the neural network for g(x)
+        self.g_network = nn.Sequential(
+            nn.Linear(n, nh1),
+            nn.ReLU(),
+            nn.Linear(nh1, nh2),
+            nn.ReLU(),
+            nn.Linear(nh2, output_dim)
+        )
 
         # Initialize optimizer and loss function here, if they are fixed
         self.criterion = nn.MSELoss()
@@ -31,22 +42,30 @@ class MyNeuralNetwork(nn.Module):
         self.path=path
         self.DataSaver_io= DataSaver(self.path,self.filename)
 
+    def f_tilde(self, x):
+        """Evaluate f(x)."""
+        return self.f_network(x)
+    
+    def g_tilde(self, x):
+        """Evaluate g(x)."""
+        return self.g_network(x)
+    
     def forward(self, x, u):
-        x = (x.unsqueeze(1)).reshape(1, -1) if x.dim() == 1 else x
-        u = u.unsqueeze(1) if u.dim() == 1 else u
-        combined = torch.cat((x, u), dim=1)
-        out = self.elu(self.layer1(combined))
-        out = self.elu(self.layer2(out))
-        y = self.output_layer(out)
-        return y
+        """
+        Evaluate x_next = f(x) + g(x) * u.
+        
+        Args:
+            x (torch.Tensor): Input state tensor of shape (batch_size, 3).
+            u (torch.Tensor): Input control tensor of shape (batch_size, 1).
+        
+        Returns:
+            torch.Tensor: The next state tensor of shape (batch_size, 3).
+        """
+        f_x = self.f_tilde(x)  # Compute f(x)
+        g_x = self.g_tilde(x)  # Compute g(x)
+        x_next = f_x + g_x * u  # Compute x_next
+        return x_next
 
-    # def load_data(self):
-    #     # Replace this with actual data loading code
-    #     input_data, y = torch.load(os.path.join(self.path,"input-output0"))
-    #     # Assuming the last dimension should be separated
-    #     x = input_data[..., :-1]  # All dimensions except the last
-    #     u = input_data[..., -1:]  # Only the last dimension
-    #     return x.float(), u.float(), y.float()
     
     def load_and_slice_training_data(self):
         x_data_list = []
@@ -111,8 +130,6 @@ class MyNeuralNetwork(nn.Module):
             if epoch % 100 == 99:
                 print(f'Epoch {epoch + 1}, Loss: {loss.item()}')
                 self.validate_model(x_val,u_val,y_val)
-        
-        
 
     
     # Method to evaluate accuracy (MSE in this case)
@@ -123,49 +140,6 @@ class MyNeuralNetwork(nn.Module):
             y_pred = self(x_test, u_test)
             mse = self.criterion(y_pred, y_test)
             print(f'Model MSE on Test Data: {mse.item()}')
-
-
-    def partial_derivative_u(self, x):
-        """
-        Evaluates the partial derivative of the network's output with respect to u at (x, 0).
-        Args:
-            x (Tensor): The input tensor x.
-
-        Returns:
-            Tensor: The partial derivative of the network with respect to u at (x, 0).
-        """
-        # Ensure x requires gradient
-        x=x.astype(np.float32)
-        x=torch.from_numpy(x)
-        x = x.requires_grad_(True)
-
-
-
-        u=torch.tensor([[0.0]], requires_grad=True)
-
-        # Create a tensor for u, initialized to zero and requires gradient
-        # u = torch.zeros_like(x, requires_grad=True)
-
-        # Forward pass
-        y = self.forward(x, u)
-
-        # Initialize container for gradients
-        grad_u = torch.zeros_like(y)
-
-        # Compute gradients for each component of y
-        for i in range(y.shape[1]):
-            # Select the i-th component of y
-            y_component = y[:, i]
-
-            # Compute gradient with respect to u
-            grad_component = torch.autograd.grad(outputs=y_component, inputs=u, 
-                                                 grad_outputs=torch.ones_like(y_component), 
-                                                 retain_graph=True, create_graph=True)[0]
-
-            # Store the computed gradient
-            grad_u[:, i] = grad_component.squeeze()
-
-        return grad_u.detach().numpy().T, y.detach().numpy().T
     
 
     def evaluate(self,x,u):
@@ -177,4 +151,95 @@ class MyNeuralNetwork(nn.Module):
 
         return out.detach().numpy().T
 
+    def compute_u_h(self, x_k, u_e_k, A_d, B_d, tau, tau_0, epsilon=1e-3):
+        """
+        Computes the value of {u^i_h}_k using the provided formula with a lower bound on the denominator.
+
+        Args:
+        - x_k : The state vector at step k.
+        - u_e_k : The control input {u^i_e}_k.
+
+        - A_d : Constant matrix A_d.
+        - B_d : Constant matrix B_d.
+        - tau (float): Constant value \tau.
+        - tau_0 (float): Constant value \tau_0.
+        - epsilon (float): A small positive value to avoid division by zero (default is 1e-6).
+
+        Returns:
+        - torch.Tensor: The computed value of {u^i_h}_k.
+        """
+        x_k_tensor = torch.tensor(x_k)
+        x_k_tensor=x_k_tensor.float()
+        # a_k (torch.Tensor): The auxiliary control input {a^i_k}.
+        a_k = x_k [2]
+        # Compute \Tilde{f}_w(x_k) and \Tilde{g}_w(x_k) using the provided neural networks
+        f_w_xk = self.f_tilde(x_k_tensor)
+        g_w_xk = self.g_tilde(x_k_tensor)
+
+        # Compute the term inside the denominator: B_d + \Tilde{g}_w(x_k)
+        denominator = torch.tensor(B_d[2],dtype=float) + g_w_xk
+
+        # Add a lower bound to the denominator to avoid division by zero
+        denominator = torch.clamp(denominator, min=epsilon)
+
+        # Compute the numerator based on the given formula
+        numerator = -A_d[2,:] @ x_k - f_w_xk + (1 - (tau / tau_0)) * a_k + (tau / tau_0) * u_e_k
+
+        # Compute {u^i_h}_k by dividing the numerator by the denominator element-wise
+        u_h_k = numerator / denominator
+
+        return u_h_k
         
+
+
+
+# Function to generate sample data
+def generate_sample_data(num_samples=1000):
+    # Randomly generate x, u, and the corresponding y = f(x) + g(x) * u
+    x = np.random.randn(num_samples, 3).astype(np.float32)  # x has 3 dimensions
+    u = np.random.randn(num_samples, 1).astype(np.float32)  # u is 1-dimensional
+    
+    # Here we're creating y as a simple function for demonstration, ideally this would be modeled data
+    y = (np.sum(x, axis=1, keepdims=True) + u).astype(np.float32)  # Dummy function for y = f(x) + g(x) * u
+    
+    # Convert x and u to PyTorch tensors
+    x_tensor = torch.tensor(x)
+    u_tensor = torch.tensor(u)
+    y_tensor = torch.tensor(y)
+    
+    # Combine x and u for saving as input
+    input_data = torch.cat((x_tensor, u_tensor), dim=1)
+    return input_data, y_tensor
+
+# Define a function to test the MyNeuralNetwork class
+def test_my_neural_network():
+    # Create the model instance
+    model = MyNeuralNetwork()
+
+    # Generate sample data
+    input_data, output_data = generate_sample_data(num_samples=1000)
+    
+    # Save the data using the save_data method
+    model.save_data(input_data, output_data)
+    print("Sample data saved.")
+
+    # Load the data
+    x, u, y = model.load_and_slice_training_data()
+    print("Data loaded:", x.shape, u.shape, y.shape)
+
+    # Train the model
+    print("Training the model...")
+    model.train_network(epochs=100)
+    print("Training complete.")
+
+    # Evaluate on a new sample
+    sample_x = np.random.randn(3).astype(np.float32)  # A random sample of x
+    sample_u = np.random.randn(1).astype(np.float32)  # A random sample of u
+    result = model.evaluate(sample_x, sample_u)
+    print(f"Evaluation result: {result}")
+
+
+
+
+# Run the test function
+# test_my_neural_network()
