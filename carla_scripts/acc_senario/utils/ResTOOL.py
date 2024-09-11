@@ -115,6 +115,21 @@ class Control():
         x=np.array(x)
         x_next=(self.Ad @ x).reshape(self.dim_n,1) + (self.Bd * u + self.Hd * v_dot_lead)
         return x_next
+    
+    def eval_nominal_vehicle(self,x,u):
+        
+        A = np.array([[0, 1, -1.6],
+                      [0, 0, -1],
+                      [0, 0, -2.17391304]])
+        B = np.array([[0],
+                      [0],
+                      [1.59130435]])
+        Ad = A * self.h + np.eye(3)
+        Bd = B * self.h
+        x=np.array(x)
+        x_next=(Ad @ x).reshape(self.dim_n,1) + (Bd * u )
+        return x_next
+    
     def opt_obj(self, Up):
         self.Objective.resetSum()
         for p in range(self.p_H):

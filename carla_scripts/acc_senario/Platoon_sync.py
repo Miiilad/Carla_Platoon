@@ -51,7 +51,7 @@ fixed_delta_seconds = 1/200 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 0,'save_data':0, 'load_model':0, 'train_model': 0, 'save_model':0,'run_simulation': 1,  'random_spawn':0}
+setting={"CBF" : 0,'save_data':1, 'load_model':1, 'train_model': 1, 'save_model':1,'run_simulation': 1,  'random_spawn':0}
 
 # attacker
 from utils.attacker import configs
@@ -66,13 +66,25 @@ configs["E2"] = 1000
 
 configs["window_length"] = 10
 attacker = FDI_attacker(configs=configs)
-attack_time = 5 # the time to start the attack
+attack_time = np.inf # the time to start the attack
 
 # Initialize and train the network
 net = MyNeuralNetwork(path="./data/dodge/")
-if setting["load_model"]:net.load_model()
-if setting["train_model"]:net.train_network()
-if setting["save_model"]: net.save_model()
+
+if setting["load_model"]:
+    try: 
+        net.load_model()
+    except:
+        print('Model not found')
+
+try: 
+     
+    if setting["train_model"]:net.train_network()
+    if setting["save_model"]: net.save_model()
+except: 
+    print('Data not found')
+
+
 if not setting["run_simulation"]: sys.exit("Done")
 # physics 
 settings.substepping = True
@@ -312,7 +324,7 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
         df.loc[len(df)] = [run_time, ego_car[i].imu_data.accelerometer.x, ego_car[i].vehicle.get_transform().rotation.yaw, ego_car[i].imu_data.compass]
 
 
-
+    print(x_k_list)
     return acceleration_list,acceleration_lead,x_k_list
 
   
@@ -354,10 +366,10 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     velocity_front_vehicle = lead_car.get_speed()
     acceleration_front_vehicle = acceleration_lead
     x_next_prediction_nom_list=[]
-    x_list=[]
+   
     speed_attacked_list = []
     
-    
+    x_list=[]
     for i in range(len_of_platoon):
         #Position relative
         distance = ego_car[i]._location.distance(location_front_vehicle)
@@ -375,22 +387,23 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
             update_sphere_indicator(lead_car,0)
         else:
             print("Attacked!")
-            velocity_error = velocity_front_vehicle - speed_attacked
+            velocity_error = velocity_front_vehicle - speed_attacked[0]
             update_sphere_indicator(lead_car,1)
 
-        x = np.array([distance_error,velocity_error,acceleration_list[i]],dtype=object)
+        x = np.array([distance_error,velocity_error,acceleration_list[i]])
+        x_list.append(x)
         #Calculate control
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle,u_pre_list[i], u_lim)#+3*np.sin(5*run_time+(i+1)*2)
         # record u for next step: it willl be needed for control value calculation
         u_pre_list[i] = input_acceleration[i]
 
         #Record samples for learning
-        x_list.append(x)
-        x_next_prediction_nom_list.append(Controller_mpc[i].eval_nominal(x, input_acceleration[i],acceleration_front_vehicle))
-        x_next_prediction_net=net.evaluate(x, input_acceleration[i])
+
+        x_next_prediction_nom_list.append(Controller_mpc[i].eval_nominal_vehicle(x_k_list[i], input_acceleration[i]))
+        x_next_prediction_net=net.evaluate(x_k_list[i], input_acceleration[i])
 
         #Calculate the safe control through optimization
-        if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x,input_acceleration[i],acceleration_front_vehicle,u_lim)
+        if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x_k_list[i],input_acceleration[i],acceleration_front_vehicle,u_lim)
         
         # print(">>>>",i, input_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
@@ -408,7 +421,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
     
 
-    return done, input_acceleration, x_list, x_next_prediction_nom_list,x_next_prediction_net
+    return done, input_acceleration, x_k_list, x_next_prediction_nom_list,x_next_prediction_net
 
 
 def loop_20ms_loop(loop_name="20ms loop"):
@@ -540,6 +553,8 @@ while True:
 
     if run_time > 1000 or done:
         # Save data (optional)
+        data_collected_input = np.array(data_collected_input)
+        data_collected_output = np.array(data_collected_output)
         
         if setting["save_data"]:net.save_data(data_collected_input,data_collected_output)
         # torch.save(input_data, 'input_data.pt'.format())
