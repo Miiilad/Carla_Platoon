@@ -146,7 +146,7 @@ class MyNeuralNetwork(nn.Module):
         x=x.astype(np.float32)
         u=u.astype(np.float32)
         scalar_tensor = torch.tensor(u)
-        out=self(torch.from_numpy(x),scalar_tensor.unsqueeze(0))
+        out=self.forward(torch.from_numpy(x),scalar_tensor.unsqueeze(0))
         
 
         return out.detach().numpy().T

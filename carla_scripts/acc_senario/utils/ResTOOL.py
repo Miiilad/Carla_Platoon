@@ -4,7 +4,7 @@ from scipy.optimize import minimize
 
 import gurobipy as gp
 from gurobipy import GRB
-
+import os
 
 class Control():
     def __init__(self, h, prediction_H, control_H, Objective):
@@ -128,7 +128,7 @@ class Control():
         Bd = B * self.h
         x=np.array(x)
         x_next=(Ad @ x).reshape(self.dim_n,1) + (Bd * u )
-        return x_next
+        return x_next.reshape(self.dim_n)
     
     def opt_obj(self, Up):
         self.Objective.resetSum()
@@ -266,6 +266,49 @@ class Objective():
 
 
 class SimResults():
+    def __init__(self, labels, max_length=10000, output_dir_path="./Simulation_Results", select={'states': 1}):
+        self.max_length = max_length
+        self.number = len(labels)
+        self.t = np.zeros(max_length)
+        self.y = np.zeros((self.number,max_length))
+        self.labels = labels
+        self.select = select
+        self.output_dir_path = output_dir_path
+        self.pallet = ['c','r', 'g', 'b', 'm', '#E67E22', '#1F618D']
+        self.cnt = 0 
+        
+        if not os.path.exists(output_dir_path):
+            os.makedirs(output_dir_path)
+        
+    def record_state(self, t, y):
+        self.y[:, self.cnt] = np.copy(y)
+        self.t[self.cnt ] = t
+        self.cnt +=1
+    
+    def graph(self, j):
+        # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>PLOT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+        # plot the 'control' + 'states' of the system vs. 'time' ################################
+        if self.select['states']:
+            fig, axes = plt.subplots(self.number, 1, figsize=(10, 6))
+            fig.tight_layout(pad=3.0)
+            
+            for ii in range(self.number):
+                axes[ii].plot(self.t[:self.cnt], self.y[ii, :self.cnt], self.pallet[ii % len(self.pallet)])
+                axes[ii].set_xlabel('t (sec)')
+                axes[ii].set_ylabel(self.labels[ii])
+                axes[ii].grid(True)
+            # plt.tight_layout()
+            # plt.ylim((-5, 5))
+
+            plt.grid(color='k', linestyle=':', linewidth=1)
+            plt.savefig(self.output_dir_path +
+                        '/fig_states_control{}.pdf'.format(j), format='pdf')
+            # plt.close(fig1)
+            # plt.show()
+
+
+
+class SimResults_():
     def __init__(self, t, Ctrl, Model, output_dir_path, select={'states': 1}):
         self.t = t
         len_t = len(t)
@@ -281,6 +324,7 @@ class SimResults():
         self.select = select
         self.output_dir_path = output_dir_path
         self.pallet = ['r', 'g', 'b', 'm', '#E67E22', '#1F618D']
+
 
     def record_state(self, i, x, u, x_ref):
         temp = np.copy(x)

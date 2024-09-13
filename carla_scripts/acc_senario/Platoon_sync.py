@@ -5,7 +5,7 @@ import carla
 import os, sys
 import math
 import time,random
-from utils.ResTOOL import Control,Objective
+from utils.ResTOOL import Control,Objective, SimResults
 import numpy as np
 import pandas as pd
 
@@ -321,9 +321,11 @@ def loop_5ms_loop(previous_loc_rot,loop_name="5ms loop", run_time=None):
         current_loc_rot = ego_car[i].get_transform_vec()
         current_loc_rot_list. append(current_loc_rot)
         
+        #Measure Slope of road and yaw_rate as disturbance
         slope = ego_car[i].calculate_slope(previous_loc_rot[i].location,current_loc_rot.location)
         yaw_rate = ego_car[i].calculate_yaw_rate(previous_loc_rot[i].rotation,current_loc_rot.rotation)
-        print(yaw_rate)
+        
+        # print(yaw_rate)
         x_k_list.append(np.array([slope, ego_car[i].get_speed(),imu_data[i][0]])) 
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
         data_to_send["custom2"]["acceleration without filtered"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x#ego_car[i]._acceleration.x
@@ -421,7 +423,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         #Record samples for learning
 
         x_next_prediction_nom_list.append(Controller_mpc[i].eval_nominal_vehicle(x_k_list[i], input_acceleration[i]))
-        x_next_prediction_net=net.evaluate(x_k_list[i], input_acceleration[i])
+        
 
         #Calculate the safe control through optimization
         if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x_k_list[i],input_acceleration[i],acceleration_front_vehicle,u_lim)
@@ -442,7 +444,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
     
 
-    return done, input_acceleration, x_k_list, x_next_prediction_nom_list,x_next_prediction_net
+    return done, input_acceleration, x_k_list, x_next_prediction_nom_list
 
 
 
@@ -468,10 +470,12 @@ Objective = Objective(Q, R)
 
 # Define the controller
 h=0.1
+sim_duration = 1000
 prediction_H = 20
 control_H = 10
 u_lim= [-1,1]
 Controller_mpc = [Control(h, prediction_H, control_H, Objective) for i in range(len_of_platoon)]
+sim_results = SimResults(["Slope","Velocity","Acceleration","output","Output Predition"], max_length = int(sim_duration/h))
 acceleration_list=[0]*len_of_platoon
 acceleration_lead=0
 input_acceleration=[0]*len_of_platoon
@@ -510,7 +514,7 @@ while True:
 
     if run_time - record_outer >= 0.1:
         # loop for speed control
-        done,input_acceleration, x_list, x_next_prediction_nom_list,x_next_prediction_net = outer_control_loop(target_distance=target_dist, run_time=run_time)
+        done,input_acceleration, x_list, x_next_prediction_nom_list = outer_control_loop(target_distance=target_dist, run_time=run_time)
 
         x_observed=x_list
         if len(x_list_previous) > 0:
@@ -518,18 +522,26 @@ while True:
                 safe_distance_for_data=7
                 if x_list_previous[i][0] > (safe_distance_for_data-target_dist):
                     input = np.append(x_list_previous[i],u_implemented[i])
-                    output= x_observed[i] - x_prediction[i]
+                    output= x_observed[i] - x_prediction_nom[i]
+                    # print(x_observed[i] , x_prediction_nom[i],'\n')
                     data_collected_input.append(input)
                     data_collected_output.append(output[2])
-                    # print("obsreved",x_observed[i]-x_prediction[i],x_observed[i]-x_prediction_net-x_prediction[i])
+                    
+                    output_prediction=net.evaluate(input[:-1],input[-1])
+                    print(output[2], output_prediction,'\n')
+                    # print("obsreved",x_observed[i]-x_prediction_nom[i],x_observed[i]-x_prediction_net-x_prediction_nom[i])
+                    print(x_k_list[i].tolist()+[output[2]]+output_prediction.tolist())
+                    sim_results.record_state(run_time,x_k_list[i].tolist()+[output[2]]+output_prediction.tolist())
                 else:
                     print(i,'th: TOO CLOSE!')
+                    
+                
 
                     
         x_list_previous = x_list
         u_implemented = input_acceleration
-        x_prediction = x_next_prediction_nom_list 
-        x_prediction_net = x_next_prediction_net
+        x_prediction_nom = x_next_prediction_nom_list 
+
 
         record_outer = run_time
 
@@ -567,7 +579,7 @@ while True:
     # <<<<< if running just for visualization <<<<<<<<<<
 
 
-    if run_time > 1000 or done:
+    if run_time > sim_duration or done:
         # Save data (optional)
         data_collected_input = np.array(data_collected_input)
         data_collected_output = np.array(data_collected_output)
@@ -582,6 +594,9 @@ for i in range(len_of_platoon):
     ego_car[i].destroy()
 lead_car.destroy()
 
+
+# save graphs
+sim_results.graph(0)
 # save the data
 df.to_csv('/home/docker/carla_scripts/datas.csv')
 
