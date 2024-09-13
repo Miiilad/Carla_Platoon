@@ -201,6 +201,21 @@ class mCar:
         self._udp_server.update(snap=snap.frame)
     def get_speed(self):
         return math.sqrt(self._velocity.x**2 + self._velocity.y**2 + self._velocity.z**2)
+    
+    def calculate_slope(self, loc1, loc2):
+        dx = loc2.x - loc1.x
+        dy = loc2.y - loc1.y
+        dz = loc2.z - loc1.z
+        
+        r = math.sqrt(dx**2 + dy**2 + dz**2)
+        if r==0:
+            slope = 0
+        else:
+            slope = math.asin(dz/r)*180
+        return slope
+    def calculate_yaw_rate(self,rot1,rot2):
+        return (rot2.yaw - rot1.yaw)*180
+        
 
     @property
     def _velocity(self):

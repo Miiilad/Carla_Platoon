@@ -171,6 +171,7 @@ reference_vehicle_transform = lead_car.vehicle.get_transform()
 len_of_platoon=1
 ego_car=[]
 route_ego=[]
+previous_loc_rot = []
 for i in range(len_of_platoon):
     print(i)
     forward_vector = reference_vehicle_transform.rotation.get_forward_vector()
@@ -181,6 +182,7 @@ for i in range(len_of_platoon):
 
     # Create a new transform for the spawned vehicle
     new_transform = carla.Transform(new_position, new_rotation)
+    previous_loc_rot.append(new_transform)
     ego_car.append(mCar(client, spawn_point=new_transform,name='ego{}'.format(i)))
     ego_car[-1].get_focus() # make spectator follow the ego car
     world.tick() 
@@ -248,6 +250,9 @@ elif use_filter == "kalman":
     # def __init__(self, x_init, F, H, P, R, Q):
     imu_filter = [KalmanFilterM(x, F, H, P, R, Q) for i in range(len_of_platoon)]
     imu_data = [[0 for _ in range(2)] for i in range(len_of_platoon)] # [acceleration, velocity]
+    
+    
+    
 
 def update_sphere_indicator(vehicle,indicator):
     height_above_vehicle=2
@@ -265,7 +270,7 @@ def update_sphere_indicator(vehicle,indicator):
     world.debug.draw_point(sphere_location, size=sphere_size, color=color, life_time=0.4, persistent_lines=False)
 
 # camera
-def loop_5ms_loop(loop_name="5ms loop", run_time=None):
+def loop_5ms_loop(previous_loc_rot,loop_name="5ms loop", run_time=None):
     # >>>>> send data to plotjuggler >>>>>>>>
     # done = lead_car.lp_control_run_step()
 
@@ -311,8 +316,15 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
     acceleration_lead=lead_car.imu_data.accelerometer.x
 
     x_k_list = []
+    current_loc_rot_list = []
     for i in range(len_of_platoon):
-        x_k_list.append(np.array([0, ego_car[i].get_speed(),imu_data[i][0]])) 
+        current_loc_rot = ego_car[i].get_transform_vec()
+        current_loc_rot_list. append(current_loc_rot)
+        
+        slope = ego_car[i].calculate_slope(previous_loc_rot[i].location,current_loc_rot.location)
+        yaw_rate = ego_car[i].calculate_yaw_rate(previous_loc_rot[i].rotation,current_loc_rot.rotation)
+        print(yaw_rate)
+        x_k_list.append(np.array([slope, ego_car[i].get_speed(),imu_data[i][0]])) 
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
         data_to_send["custom2"]["acceleration without filtered"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x#ego_car[i]._acceleration.x
         # get the yaw angle of the vehicle
@@ -323,11 +335,17 @@ def loop_5ms_loop(loop_name="5ms loop", run_time=None):
         # pandas loc append
         df.loc[len(df)] = [run_time, ego_car[i].imu_data.accelerometer.x, ego_car[i].vehicle.get_transform().rotation.yaw, ego_car[i].imu_data.compass]
 
+    previous_loc_rot = current_loc_rot_list
+    # print(x_k_list)
+    
+    return acceleration_list,acceleration_lead,x_k_list,previous_loc_rot
 
-    print(x_k_list)
-    return acceleration_list,acceleration_lead,x_k_list
 
-  
+def loop_20ms_loop(loop_name="20ms loop"):
+    # this loop is for MPC
+    target_dist = 20
+    return target_dist
+
 
 def inner_control_loop(x_k_list,loop_name="10ms loop", target_distance=10):
     for i in range(len_of_platoon):
@@ -394,6 +412,9 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         x_list.append(x)
         #Calculate control
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle,u_pre_list[i], u_lim)#+3*np.sin(5*run_time+(i+1)*2)
+        input_acceleration[i] += np.random.uniform(-0.5,0.5,1)[0]
+        input_acceleration[i] =  np.clip(input_acceleration[i], u_lim[0], u_lim[1])
+
         # record u for next step: it willl be needed for control value calculation
         u_pre_list[i] = input_acceleration[i]
 
@@ -424,10 +445,6 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     return done, input_acceleration, x_k_list, x_next_prediction_nom_list,x_next_prediction_net
 
 
-def loop_20ms_loop(loop_name="20ms loop"):
-    # this loop is for MPC
-    target_dist = 20
-    return target_dist
 
 # variables for the loop
 record_5ms = 0
@@ -464,7 +481,6 @@ x_list_previous = []
 u_pre_list=np.zeros(len_of_platoon)
 
 
-
 done = False
 count = 0   
 while True:
@@ -483,7 +499,7 @@ while True:
 
     # >>>>>>>>>>>>>>>>>> run the loop >>>>>>>>>>>>>>>>>>
     if run_time - record_5ms >= 0.005:
-        acceleration_list,acceleration_lead,x_k_list=loop_5ms_loop(run_time=run_time)
+        acceleration_list,acceleration_lead,x_k_list,previous_loc_rot=loop_5ms_loop(previous_loc_rot,run_time=run_time)
         record_5ms = run_time
     
     if run_time - record_20ms >= 0.2:
