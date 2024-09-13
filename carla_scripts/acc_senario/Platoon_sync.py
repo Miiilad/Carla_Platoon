@@ -414,7 +414,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
         x_list.append(x)
         #Calculate control
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle,u_pre_list[i], u_lim)#+3*np.sin(5*run_time+(i+1)*2)
-        input_acceleration[i] += np.random.uniform(-0.5,0.5,1)[0]
+        input_acceleration[i] += 0.3*np.random.randn()
         input_acceleration[i] =  np.clip(input_acceleration[i], u_lim[0], u_lim[1])
 
         # record u for next step: it willl be needed for control value calculation
@@ -475,7 +475,7 @@ prediction_H = 20
 control_H = 10
 u_lim= [-1,1]
 Controller_mpc = [Control(h, prediction_H, control_H, Objective) for i in range(len_of_platoon)]
-sim_results = SimResults(["Slope","Velocity","Acceleration","output","Output Predition"], max_length = int(sim_duration/h))
+sim_results = SimResults(["Slope","Velocity","Acceleration",["output","Output Predition"]], max_length = int(sim_duration/h))
 acceleration_list=[0]*len_of_platoon
 acceleration_lead=0
 input_acceleration=[0]*len_of_platoon
@@ -523,14 +523,14 @@ while True:
                 if x_list_previous[i][0] > (safe_distance_for_data-target_dist):
                     input = np.append(x_list_previous[i],u_implemented[i])
                     output= x_observed[i] - x_prediction_nom[i]
-                    # print(x_observed[i] , x_prediction_nom[i],'\n')
+
                     data_collected_input.append(input)
                     data_collected_output.append(output[2])
                     
                     output_prediction=net.evaluate(input[:-1],input[-1])
-                    print(output[2], output_prediction,'\n')
+                    # print(output[2], output_prediction,'\n')
                     # print("obsreved",x_observed[i]-x_prediction_nom[i],x_observed[i]-x_prediction_net-x_prediction_nom[i])
-                    print(x_k_list[i].tolist()+[output[2]]+output_prediction.tolist())
+                    # print(x_k_list[i].tolist()+[output[2]]+output_prediction.tolist())
                     sim_results.record_state(run_time,x_k_list[i].tolist()+[output[2]]+output_prediction.tolist())
                 else:
                     print(i,'th: TOO CLOSE!')

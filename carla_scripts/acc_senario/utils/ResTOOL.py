@@ -265,10 +265,84 @@ class Objective():
         self.sum = 0
 
 
+
+
+
+
 class SimResults():
     def __init__(self, labels, max_length=10000, output_dir_path="./Simulation_Results", select={'states': 1}):
         self.max_length = max_length
-        self.number = len(labels)
+        self.labels = labels  # Mixed list of strings and lists
+        self.number_of_subplots = len(labels)  # Number of subplots
+        self.y = []  # Storage for the signals in each subplot
+
+        for label in labels:
+            if isinstance(label, list):
+                self.y.append(np.zeros((len(label), max_length)))  # Multiple signals in the same subplot
+            else:
+                self.y.append(np.zeros((1, max_length)))  # Single signal in a subplot
+
+        self.t = np.zeros(max_length)
+        self.select = select
+        self.output_dir_path = output_dir_path
+        self.pallet = ['c', 'r', 'g', 'b', 'm', '#E67E22', '#1F618D']
+        self.cnt = 0
+        
+        if not os.path.exists(output_dir_path):
+            os.makedirs(output_dir_path)
+    
+    def record_state(self, t, y):
+        self.t[self.cnt] = t
+        start_idx = 0
+
+        for i, label in enumerate(self.labels):
+            if isinstance(label, list):
+                num_signals = len(label)
+                self.y[i][:, self.cnt] = np.copy(y[start_idx:start_idx + num_signals])
+                start_idx += num_signals
+            else:
+                self.y[i][0, self.cnt] = y[start_idx]
+                start_idx += 1
+        
+        self.cnt += 1
+
+    def graph(self, j):
+        # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>PLOT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+        if self.select['states']:
+            fig, axes = plt.subplots(self.number_of_subplots, 1, figsize=(10, 6))
+            fig.tight_layout(pad=3.0)
+
+            for i, label in enumerate(self.labels):
+                if isinstance(label, list):
+                    # Plot multiple signals in one subplot
+                    for ii, sublabel in enumerate(label):
+                        axes[i].plot(self.t[:self.cnt], self.y[i][ii, :self.cnt], self.pallet[ii % len(self.pallet)], label=sublabel)
+                    axes[i].legend(loc='upper right')
+                else:
+                    # Plot single signal in a subplot
+                    axes[i].plot(self.t[:self.cnt], self.y[i][0, :self.cnt], self.pallet[0], label=label)
+                
+                axes[i].set_xlabel('t (sec)')
+                axes[i].set_ylabel(', '.join(label) if isinstance(label, list) else label)
+                axes[i].grid(True)
+
+            plt.grid(color='k', linestyle=':', linewidth=1)
+            plt.savefig(self.output_dir_path + '/fig_states_control{}.pdf'.format(j), format='pdf')
+
+
+
+
+
+
+
+
+
+
+
+class SimResults_():
+    def __init__(self, labels, max_length=10000, output_dir_path="./Simulation_Results", select={'states': 1}):
+        self.max_length = max_length
+        self.number = 5
         self.t = np.zeros(max_length)
         self.y = np.zeros((self.number,max_length))
         self.labels = labels
@@ -286,19 +360,16 @@ class SimResults():
         self.cnt +=1
     
     def graph(self, j):
-        # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>PLOT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-        # plot the 'control' + 'states' of the system vs. 'time' ################################
         if self.select['states']:
-            fig, axes = plt.subplots(self.number, 1, figsize=(10, 6))
+            fig, axes = plt.subplots(self.number_of_subplots, 1, figsize=(10, 6))
             fig.tight_layout(pad=3.0)
-            
-            for ii in range(self.number):
-                axes[ii].plot(self.t[:self.cnt], self.y[ii, :self.cnt], self.pallet[ii % len(self.pallet)])
-                axes[ii].set_xlabel('t (sec)')
-                axes[ii].set_ylabel(self.labels[ii])
-                axes[ii].grid(True)
-            # plt.tight_layout()
-            # plt.ylim((-5, 5))
+
+            for i, sublist in enumerate(self.labels):
+                for ii, label in enumerate(sublist):
+                    axes[i].plot(self.t[:self.cnt], self.y[i][ii, :self.cnt], self.pallet[ii % len(self.pallet)], label=label)
+                axes[i].set_xlabel('t (sec)')
+                axes[i].legend(loc='upper right')
+                axes[i].grid(True)
 
             plt.grid(color='k', linestyle=':', linewidth=1)
             plt.savefig(self.output_dir_path +
@@ -308,138 +379,138 @@ class SimResults():
 
 
 
-class SimResults_():
-    def __init__(self, t, Ctrl, Model, output_dir_path, select={'states': 1}):
-        self.t = t
-        len_t = len(t)
-        self.Model = Model
-        self.Ctrl = Ctrl
-        self.x_s_history = np.zeros((self.dim_n, len_t))
-        self.u_history = np.zeros((self.dim_m, len_t))
+# class SimResults_():
+#     def __init__(self, t, Ctrl, Model, output_dir_path, select={'states': 1}):
+#         self.t = t
+#         len_t = len(t)
+#         self.Model = Model
+#         self.Ctrl = Ctrl
+#         self.x_s_history = np.zeros((self.dim_n, len_t))
+#         self.u_history = np.zeros((self.dim_m, len_t))
 
-        # the residule of x, attack time
-        self.residule = np.zeros(len_t)
-        self.attack_time = -1
+#         # the residule of x, attack time
+#         self.residule = np.zeros(len_t)
+#         self.attack_time = -1
 
-        self.select = select
-        self.output_dir_path = output_dir_path
-        self.pallet = ['r', 'g', 'b', 'm', '#E67E22', '#1F618D']
+#         self.select = select
+#         self.output_dir_path = output_dir_path
+#         self.pallet = ['r', 'g', 'b', 'm', '#E67E22', '#1F618D']
 
 
-    def record_state(self, i, x, u, x_ref):
-        temp = np.copy(x)
-        temp = temp - x_ref
-        self.x_s_history[:, i] = temp
-        self.u_history[:, i] = u
+#     def record_state(self, i, x, u, x_ref):
+#         temp = np.copy(x)
+#         temp = temp - x_ref
+#         self.x_s_history[:, i] = temp
+#         self.u_history[:, i] = u
 
-    def graph(self, j, i):
-        # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>PLOT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-        # plot the 'control' + 'states' of the system vs. 'time' ################################
-        if self.select['states']:
-            fig1 = plt.figure()
-            for im in range(self.dim_m):
-                plt.plot(self.t[:i], self.u_history[im, :i], 'c')
-            for ii in range(self.dim_n):
-                plt.plot(self.t[:i], self.x_s_history[ii, :i],
-                         self.pallet[ii % len(self.pallet)])
+#     def graph(self, j, i):
+#         # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>PLOT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#         # plot the 'control' + 'states' of the system vs. 'time' ################################
+#         if self.select['states']:
+#             fig1 = plt.figure()
+#             for im in range(self.dim_m):
+#                 plt.plot(self.t[:i], self.u_history[im, :i], 'c')
+#             for ii in range(self.dim_n):
+#                 plt.plot(self.t[:i], self.x_s_history[ii, :i],
+#                          self.pallet[ii % len(self.pallet)])
 
-            plt.legend(
-                ["Control", "Position", "Velocity", "Accelration"], loc=1)
-            plt.xlabel('t (sec)')
-            plt.ylabel('States and Control')
-            # plt.tight_layout()
-            # plt.ylim((-5, 5))
+#             plt.legend(
+#                 ["Control", "Position", "Velocity", "Accelration"], loc=1)
+#             plt.xlabel('t (sec)')
+#             plt.ylabel('States and Control')
+#             # plt.tight_layout()
+#             # plt.ylim((-5, 5))
 
-            plt.grid(color='k', linestyle=':', linewidth=1)
-            plt.savefig(self.output_dir_path +
-                        '/fig_states_control{}.pdf'.format(j), format='pdf')
-            # plt.close(fig1)
-            # plt.show()
+#             plt.grid(color='k', linestyle=':', linewidth=1)
+#             plt.savefig(self.output_dir_path +
+#                         '/fig_states_control{}.pdf'.format(j), format='pdf')
+#             # plt.close(fig1)
+#             # plt.show()
 
-    # record everything in the movie
-    def record_system(self, i, x, u, x_ref, residule, attack_time=-1):
-        if attack_time != -1:
-            self.attack_time = attack_time
-        temp = np.copy(x)
-        temp = temp - x_ref
-        self.x_s_history[:, i] = temp
-        self.u_history[:, i] = u
-        self.residule[i] = residule
+#     # record everything in the movie
+#     def record_system(self, i, x, u, x_ref, residule, attack_time=-1):
+#         if attack_time != -1:
+#             self.attack_time = attack_time
+#         temp = np.copy(x)
+#         temp = temp - x_ref
+#         self.x_s_history[:, i] = temp
+#         self.u_history[:, i] = u
+#         self.residule[i] = residule
 
-    def graph_system(self, j, i):
-        # initialize
-        fig, ax = plt.subplots()
+#     def graph_system(self, j, i):
+#         # initialize
+#         fig, ax = plt.subplots()
 
-        # plot the control and the system
-        # plot state variable and input
-        for im in range(self.dim_m):
-            ax.plot(self.t[:i], self.u_history[im, :i], 'c')
-        for ii in range(self.dim_n):
-            ax.plot(self.t[:i], self.x_s_history[ii, :i],
-                    self.pallet[ii % len(self.pallet)])
+#         # plot the control and the system
+#         # plot state variable and input
+#         for im in range(self.dim_m):
+#             ax.plot(self.t[:i], self.u_history[im, :i], 'c')
+#         for ii in range(self.dim_n):
+#             ax.plot(self.t[:i], self.x_s_history[ii, :i],
+#                     self.pallet[ii % len(self.pallet)])
 
-        fig.legend(
-            ["Control", "Position", "Velocity", "Accelration"], loc=1)
-        plt.xlabel('t (sec)')
-        plt.ylabel('States and Control')
+#         fig.legend(
+#             ["Control", "Position", "Velocity", "Accelration"], loc=1)
+#         plt.xlabel('t (sec)')
+#         plt.ylabel('States and Control')
 
-        if self.attack_time > 0:
-            plt.axvline(x=self.attack_time, color='r', linewidth=0.15)
-            plt.text(self.attack_time, 0, s="attack launched", color='r')
+#         if self.attack_time > 0:
+#             plt.axvline(x=self.attack_time, color='r', linewidth=0.15)
+#             plt.text(self.attack_time, 0, s="attack launched", color='r')
 
-        plt.grid(color='k', linestyle=':', linewidth=1)
-        plt.savefig(self.output_dir_path +
-                    '/fig_system{}.pdf'.format(j), format='pdf')
+#         plt.grid(color='k', linestyle=':', linewidth=1)
+#         plt.savefig(self.output_dir_path +
+#                     '/fig_system{}.pdf'.format(j), format='pdf')
 
-    def graph_system(self, j, i):
-        # initialize
-        fig, ax = plt.subplots()
+#     def graph_system(self, j, i):
+#         # initialize
+#         fig, ax = plt.subplots()
 
-        # plot the control and the system
-        # plot state variable and input
-        for im in range(self.dim_m):
-            ax.plot(self.t[:i], self.u_history[im, :i], 'c')
-        for ii in range(self.dim_n):
-            ax.plot(self.t[:i], self.x_s_history[ii, :i],
-                    self.pallet[ii % len(self.pallet)])
+#         # plot the control and the system
+#         # plot state variable and input
+#         for im in range(self.dim_m):
+#             ax.plot(self.t[:i], self.u_history[im, :i], 'c')
+#         for ii in range(self.dim_n):
+#             ax.plot(self.t[:i], self.x_s_history[ii, :i],
+#                     self.pallet[ii % len(self.pallet)])
 
-        fig.legend(
-            ["Control", "Position", "Velocity", "Accelration"], loc=1)
-        plt.xlabel('t (sec)')
-        plt.ylabel('States and Control')
+#         fig.legend(
+#             ["Control", "Position", "Velocity", "Accelration"], loc=1)
+#         plt.xlabel('t (sec)')
+#         plt.ylabel('States and Control')
 
-        if self.attack_time > 0:
-            plt.axvline(x=self.attack_time, color='r', linewidth=0.15)
-            plt.text(self.attack_time, -0.05, "attack launched",
-                     transform=ax.get_xaxis_transform(),
-                     ha='center', va='top', color='r')
+#         if self.attack_time > 0:
+#             plt.axvline(x=self.attack_time, color='r', linewidth=0.15)
+#             plt.text(self.attack_time, -0.05, "attack launched",
+#                      transform=ax.get_xaxis_transform(),
+#                      ha='center', va='top', color='r')
 
-        plt.grid(color='k', linestyle=':', linewidth=1)
-        plt.savefig(self.output_dir_path +
-                    '/fig_system{}.pdf'.format(j), format='pdf')
+#         plt.grid(color='k', linestyle=':', linewidth=1)
+#         plt.savefig(self.output_dir_path +
+#                     '/fig_system{}.pdf'.format(j), format='pdf')
 
-    def graph_residule(self, j, i):
-        # initialize
-        fig, ax = plt.subplots()
+#     def graph_residule(self, j, i):
+#         # initialize
+#         fig, ax = plt.subplots()
 
-        # plot the control and the system
-        # plot state variable and input
-        ax.plot(self.t, self.residule, 'c')
+#         # plot the control and the system
+#         # plot state variable and input
+#         ax.plot(self.t, self.residule, 'c')
 
-        fig.legend(["residule"], loc=1)
-        plt.xlabel('t (sec)')
-        plt.ylabel('residule value')
+#         fig.legend(["residule"], loc=1)
+#         plt.xlabel('t (sec)')
+#         plt.ylabel('residule value')
 
-        if self.attack_time > 0:
-            plt.axvline(x=self.attack_time, color='r', linewidth=0.15)
-            # plt.text(self.attack_time, 0, s="attack launched", color='r')
-            plt.text(self.attack_time, -0.05, "attack launched",
-                     transform=ax.get_xaxis_transform(),
-                     ha='center', va='top', color='r')
-        plt.grid(color='k', linestyle=':', linewidth=1)
-        plt.savefig(self.output_dir_path +
-                    '/fig_residule{}.pdf'.format(j), format='pdf')
+#         if self.attack_time > 0:
+#             plt.axvline(x=self.attack_time, color='r', linewidth=0.15)
+#             # plt.text(self.attack_time, 0, s="attack launched", color='r')
+#             plt.text(self.attack_time, -0.05, "attack launched",
+#                      transform=ax.get_xaxis_transform(),
+#                      ha='center', va='top', color='r')
+#         plt.grid(color='k', linestyle=':', linewidth=1)
+#         plt.savefig(self.output_dir_path +
+#                     '/fig_residule{}.pdf'.format(j), format='pdf')
 
-    def printout(self, j):
-        # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>PRINT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-        pass
+#     def printout(self, j):
+#         # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>PRINT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#         pass
