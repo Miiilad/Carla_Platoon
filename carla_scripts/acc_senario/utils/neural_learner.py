@@ -9,7 +9,7 @@ import numpy as np
 # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
 
 class MyNeuralNetwork(nn.Module):
-    def __init__(self,path="./data/",n=3, nh1=20, nh2=20, output_dim=1):
+    def __init__(self,path="./data/",n=3, nh1=100, nh2=50, output_dim=1):
         # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
         # n = 3  # example value for n
         # nh = 10  # example value for nh
@@ -41,6 +41,8 @@ class MyNeuralNetwork(nn.Module):
         self.filename="input-output"
         self.path=path
         self.DataSaver_io= DataSaver(self.path,self.filename)
+        
+
 
     def f_tilde(self, x):
         """Evaluate f(x)."""
@@ -102,8 +104,15 @@ class MyNeuralNetwork(nn.Module):
         """
         Save the model's state dictionary to a specified file path.
         """
+        normalization_params = {
+            'mean_x': self.norm_mean_x,
+            'std_x': self.norm_std_x,
+            'mean_u': self.norm_mean_u,
+            'std_u': self.norm_std_u
+        }
         file_path = self.path
-        torch.save(self.state_dict(), file_path+filename)
+        torch.save({ 'model_state_dict': self.state_dict(),
+                  'normalization_params': normalization_params}, file_path+filename)
         print(f"Model saved to {file_path}")
 
     def load_model(self,filename="myNN"):
@@ -111,7 +120,14 @@ class MyNeuralNetwork(nn.Module):
         Load the model's state dictionary from a specified file path.
         """
         file_path = self.path
-        self.load_state_dict(torch.load(file_path+filename))
+        checkpoint = torch.load(file_path+filename)
+        self.load_state_dict(checkpoint['model_state_dict'])
+        normalization_params = checkpoint['normalization_params']
+
+        self.norm_mean_x = normalization_params['mean_x']
+        self.norm_std_x = normalization_params['std_x']
+        self.norm_mean_u = normalization_params['mean_u']
+        self.norm_std_u = normalization_params['std_u']
         self.eval()  # Set the model to evaluation mode
         print(f"Model loaded from {file_path}")
 
@@ -120,16 +136,29 @@ class MyNeuralNetwork(nn.Module):
         x_train, x_val, u_train, u_val, y_train, y_val = train_test_split(
             x, u, y_actual, test_size=0.2, random_state=30)
         epochs = 3 * len(x)
+        
+        self.norm_mean_x = x_train.mean(dim=0)
+        self.norm_std_x = x_train.std(dim=0)
+        normalized_x_train = (x_train - self.norm_mean_x) / self.norm_std_x
+        
+        self.norm_mean_u = u_train.mean(dim=0)
+        self.norm_std_u = u_train.std(dim=0)
+        normalized_u_train = (u_train - self.norm_mean_u) / self.norm_std_u
+        
+        normalized_x_val = (x_val - self.norm_mean_x) / self.norm_std_x
+        normalized_u_val = (u_val - self.norm_mean_u) / self.norm_std_u
+        # print('Normalization',self.norm_std_x,self.norm_mean_x)
+        
         for epoch in range(epochs):
             self.optimizer.zero_grad()
-            y_pred = self(x_train, u_train)
+            y_pred = self(normalized_x_train, normalized_u_train)
             loss = self.criterion(y_pred, y_train)
             loss.backward()
             self.optimizer.step()
 
             if epoch % 100 == 99:
                 print(f'Epoch {epoch + 1}, Loss: {loss.item()}')
-                self.validate_model(x_val,u_val,y_val)
+                self.validate_model(normalized_x_val,normalized_u_val,y_val)
 
     
     # Method to evaluate accuracy (MSE in this case)
