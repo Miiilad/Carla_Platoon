@@ -287,6 +287,7 @@ class SimResults():
         self.output_dir_path = output_dir_path
         self.pallet = ['c', 'r', 'g', 'b', 'm', '#E67E22', '#1F618D']
         self.cnt = 0
+        self.limits = [[-30,30],[-2,30],[-5,5],[-1.1,1.1],[[-5,5],[-5,5]]]
         
         if not os.path.exists(output_dir_path):
             os.makedirs(output_dir_path)
@@ -309,8 +310,8 @@ class SimResults():
     def graph(self, j):
         # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>PLOT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         if self.select['states']:
-            fig, axes = plt.subplots(self.number_of_subplots, 1, figsize=(10, 6))
-            fig.tight_layout(pad=3.0)
+            fig, axes = plt.subplots(self.number_of_subplots, 1, figsize=(15, 20))
+            fig.tight_layout(pad=0.5)
 
             for i, label in enumerate(self.labels):
                 if isinstance(label, list):
@@ -318,9 +319,11 @@ class SimResults():
                     for ii, sublabel in enumerate(label):
                         axes[i].plot(self.t[:self.cnt], self.y[i][ii, :self.cnt], self.pallet[ii % len(self.pallet)], label=sublabel)
                     axes[i].legend(loc='upper right')
+                    axes[i].set_ylim(self.limits[i][ii][0],self.limits[i][ii][1])
                 else:
                     # Plot single signal in a subplot
                     axes[i].plot(self.t[:self.cnt], self.y[i][0, :self.cnt], self.pallet[0], label=label)
+                    axes[i].set_ylim(self.limits[i][0],self.limits[i][1])
                 
                 axes[i].set_xlabel('t (sec)')
                 axes[i].set_ylabel(', '.join(label) if isinstance(label, list) else label)
