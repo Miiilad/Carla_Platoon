@@ -71,18 +71,21 @@ attack_time = np.inf # the time to start the attack
 # Initialize and train the network
 net = MyNeuralNetwork(path="./data/dodge/")
 
+
 if setting["load_model"]:
     try: 
         net.load_model()
     except:
         print('Model not found')
 
-try: 
-     
-    if setting["train_model"]:net.train_network()
-    if setting["save_model"]: net.save_model()
-except: 
-    print('Data not found')
+
+if setting["train_model"]:
+    try: 
+        
+        net.train_network()
+        if setting["save_model"]: net.save_model()
+    except: 
+        print('Data not found')
 
 
 if not setting["run_simulation"]: sys.exit("Done")
@@ -378,7 +381,7 @@ def inner_control_loop(x_k_list,loop_name="10ms loop", target_distance=10):
 
     return done
 
-def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None):
+def outer_control_loop(x_measure_list,loop_name="10ms loop", target_distance=10, run_time=None):
 
 
     # world.tick()
@@ -389,7 +392,7 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
    
     speed_attacked_list = []
     
-    x_list=[]
+    x_list_acc=[]
     for i in range(len_of_platoon):
         #Position relative
         distance = ego_car[i]._location.distance(location_front_vehicle)
@@ -411,10 +414,10 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
             update_sphere_indicator(lead_car,1)
 
         x = np.array([distance_error,velocity_error,acceleration_list[i]])
-        x_list.append(x)
+        x_list_acc.append(x)
         #Calculate control
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle,u_pre_list[i], u_lim)#+3*np.sin(5*run_time+(i+1)*2)
-        input_acceleration[i] += 0.3*np.random.randn()
+        input_acceleration[i] += 0.3*np.sin(run_time)
         input_acceleration[i] =  np.clip(input_acceleration[i], u_lim[0], u_lim[1])
 
         # record u for next step: it willl be needed for control value calculation
@@ -422,11 +425,11 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
 
         #Record samples for learning
 
-        x_next_prediction_nom_list.append(Controller_mpc[i].eval_nominal_vehicle(x_k_list[i], input_acceleration[i]))
+        x_next_prediction_nom_list.append(Controller_mpc[i].eval_nominal_vehicle(x_measure_list[i], input_acceleration[i]))
         
 
         #Calculate the safe control through optimization
-        if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x_k_list[i],input_acceleration[i],acceleration_front_vehicle,u_lim)
+        if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x_measure_list[i],input_acceleration[i],acceleration_front_vehicle,u_lim)
         
         # print(">>>>",i, input_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
@@ -438,13 +441,13 @@ def outer_control_loop(loop_name="10ms loop", target_distance=10, run_time=None)
     for i in range(len_of_platoon):
         data_to_send["custom data"]["acceleration"]["target{}:x".format(i)] = input_acceleration[i]
         data_to_send["custom data"]["ego_car_speed{}".format(i)] = ego_car[i].get_speed()
-        data_to_send["custom data"]["distance_error{}".format(i)] = x_list[i][0]
+        data_to_send["custom data"]["distance_error{}".format(i)] = x_list_acc[i][0]
         data_to_send["custom data"]["speed attacked{}".format(i)] = float(speed_attacked_list[i])
     data_to_send["custom data"]["target_dist"] = target_distance
     data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
     
 
-    return done, input_acceleration, x_k_list, x_next_prediction_nom_list
+    return done, input_acceleration, x_measure_list, x_next_prediction_nom_list
 
 
 
@@ -470,18 +473,18 @@ Objective = Objective(Q, R)
 
 # Define the controller
 h=0.1
-sim_duration = 1000
+sim_duration = 50
 prediction_H = 20
 control_H = 10
 u_lim= [-1,1]
 Controller_mpc = [Control(h, prediction_H, control_H, Objective) for i in range(len_of_platoon)]
-sim_results = SimResults(["Slope","Velocity","Acceleration",["output","Output Predition"]], max_length = int(sim_duration/h))
+sim_results = SimResults(["Slope","Velocity","Acceleration","Input-ThBr",["output","Output Predition"]], max_length = int(sim_duration/h))
 acceleration_list=[0]*len_of_platoon
 acceleration_lead=0
 input_acceleration=[0]*len_of_platoon
 data_collected_input = []
 data_collected_output = []
-x_list_previous = []
+x_measure_list_previous = []
 u_pre_list=np.zeros(len_of_platoon)
 
 
@@ -514,33 +517,40 @@ while True:
 
     if run_time - record_outer >= 0.1:
         # loop for speed control
-        done,input_acceleration, x_list, x_next_prediction_nom_list = outer_control_loop(target_distance=target_dist, run_time=run_time)
+        done,input_acceleration, x_measure_list, x_next_prediction_nom_list = outer_control_loop(x_k_list,target_distance=target_dist, run_time=run_time)
 
-        x_observed=x_list
-        if len(x_list_previous) > 0:
+        if len(x_measure_list_previous) > 0:
             for i in range(len_of_platoon):
                 safe_distance_for_data=7
-                if x_list_previous[i][0] > (safe_distance_for_data-target_dist):
-                    input = np.append(x_list_previous[i],u_implemented[i])
-                    output= x_observed[i] - x_prediction_nom[i]
+                if x_measure_list_previous[i][0] > (safe_distance_for_data-target_dist):
+                    input = np.append(x_measure_list_previous[i],u_implemented[i])
+                    output= x_measure_list[i][2] - x_next_prediction_nom_list_previous[i][2]
 
-                    data_collected_input.append(input)
-                    data_collected_output.append(output[2])
+
+                    if gear == 3:
+                        data_collected_input.append(input)
+                        data_collected_output.append(output)
                     
-                    output_prediction=net.evaluate(input[:-1],input[-1])
-                    # print(output[2], output_prediction,'\n')
+                    output_NN_evaluate=net.evaluate(input[:-1],input[-1])
+                    # print(output[2], output_NN_evaluate,'\n')
                     # print("obsreved",x_observed[i]-x_prediction_nom[i],x_observed[i]-x_prediction_net-x_prediction_nom[i])
-                    # print(x_k_list[i].tolist()+[output[2]]+output_prediction.tolist())
-                    sim_results.record_state(run_time,x_k_list[i].tolist()+[output[2]]+output_prediction.tolist())
+                    # print(x_k_list[i].tolist()+[output[2]]+output_NN_evaluate.tolist())
+                    sim_results.record_state(run_time,x_k_list[i].tolist()+[input_acceleration[i]]+[output]+output_NN_evaluate.tolist())
+                    # print('gear',ego_car[i]._gear)
+                    # if ego_car[i]._gear==3: 
+                    #     ego_car[i].vehicle.get_control().manual_gear_shift = True
+                    #     ego_car[i].vehicle.get_control().gear = 3
+                    #     ego_car[i]._set_gear(3)
                 else:
-                    print(i,'th: TOO CLOSE!')
+                    pass
+                    # print(i,'th: TOO CLOSE!')
                     
                 
 
-                    
-        x_list_previous = x_list
+        gear = ego_car[i]._gear
+        x_measure_list_previous = x_measure_list
         u_implemented = input_acceleration
-        x_prediction_nom = x_next_prediction_nom_list 
+        x_next_prediction_nom_list_previous = x_next_prediction_nom_list 
 
 
         record_outer = run_time

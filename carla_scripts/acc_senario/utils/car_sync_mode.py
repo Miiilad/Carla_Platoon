@@ -130,8 +130,14 @@ class mCar:
         self.run_speed = speed
 
     def lp_control_run_step(self,brake = -0.1, throttle = -0.1, run_time = 0):
+        
         self.localplanner.set_speed(self.run_speed)
         control = self.localplanner.run_step()
+        
+        if self._gear == 3 : 
+            control.manual_gear_shift = True  # Enable manual gear shifting
+            control.gear = 3  # For example, lock the vehicle in 3rd gear
+            # print('hiiiiii')
 
         if throttle >=0:
             control.throttle = throttle
@@ -215,6 +221,16 @@ class mCar:
         return slope
     def calculate_yaw_rate(self,rot1,rot2):
         return (rot2.yaw - rot1.yaw)*180
+    
+    def _set_gear(self,gear):
+        control = self.localplanner.run_step()
+
+        # Now modify the control to lock the gear
+        control.manual_gear_shift = True  # Enable manual gear shifting
+        control.gear = gear  # For example, lock the vehicle in 2nd gear
+        # Apply the modified control to the vehicle
+        self._udp_server.update_control(control)
+        self.apply_control(control)
         
 
     @property
@@ -232,3 +248,9 @@ class mCar:
     @property
     def _abs_velocity(self):
         return math.sqrt(self._velocity.x**2 + self._velocity.y**2 + self._velocity.z**2)
+    
+    @property
+    def _gear(self):
+        return self.vehicle.get_control().gear
+    
+    
