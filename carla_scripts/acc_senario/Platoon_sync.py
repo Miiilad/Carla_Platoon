@@ -75,8 +75,10 @@ net = MyNeuralNetwork(path="./data/dodge/")
 if setting["load_model"]:
     try: 
         net.load_model()
+        loaded_NN_model =True
     except:
         print('Model not found')
+        loaded_NN_model =False
 
 
 if setting["train_model"]:
@@ -84,6 +86,7 @@ if setting["train_model"]:
         
         net.train_network()
         if setting["save_model"]: net.save_model()
+        loaded_NN_model =True
     except: 
         print('Data not found')
 
@@ -417,7 +420,7 @@ def outer_control_loop(x_measure_list,loop_name="10ms loop", target_distance=10,
         x_list_acc.append(x)
         #Calculate control
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle,u_pre_list[i], u_lim)#+3*np.sin(5*run_time+(i+1)*2)
-        input_acceleration[i] += 0.3*np.sin(run_time)
+        input_acceleration[i] += 0.3*np.sin(run_time+random_for_input)
         input_acceleration[i] =  np.clip(input_acceleration[i], u_lim[0], u_lim[1])
 
         # record u for next step: it willl be needed for control value calculation
@@ -487,6 +490,8 @@ data_collected_output = []
 x_measure_list_previous = []
 u_pre_list=np.zeros(len_of_platoon)
 
+random_for_input = np.random.uniform(0,100)
+
 
 done = False
 count = 0   
@@ -524,18 +529,25 @@ while True:
                 safe_distance_for_data=7
                 if x_measure_list_previous[i][0] > (safe_distance_for_data-target_dist):
                     input = np.append(x_measure_list_previous[i],u_implemented[i])
-                    output= x_measure_list[i][2] - x_next_prediction_nom_list_previous[i][2]
+                    # output= x_measure_list[i][2] #- x_next_prediction_nom_list_previous[i][2]
+                    output= x_measure_list_previous[i][2] #+ u_implemented[i] #- x_next_prediction_nom_list_previous[i][2]
 
 
                     if gear == 3:
                         data_collected_input.append(input)
                         data_collected_output.append(output)
                     
-                    output_NN_evaluate=net.evaluate(input[:-1],input[-1])
+                    
                     # print(output[2], output_NN_evaluate,'\n')
                     # print("obsreved",x_observed[i]-x_prediction_nom[i],x_observed[i]-x_prediction_net-x_prediction_nom[i])
                     # print(x_k_list[i].tolist()+[output[2]]+output_NN_evaluate.tolist())
-                    sim_results.record_state(run_time,x_k_list[i].tolist()+[input_acceleration[i]]+[output]+output_NN_evaluate.tolist())
+                    if (gear == 3) and loaded_NN_model:
+                        output_NN_evaluate=net.evaluate(input[:-1],input[-1])
+                        out_NN = output_NN_evaluate.tolist()[0]
+                    else: 
+                        out_NN = [0.0]
+                    # print(x_k_list[i].tolist()+[input_acceleration[i]]+[output]+out_NN)
+                    sim_results.record_state(run_time,x_k_list[i].tolist()+[input_acceleration[i]]+[output]+out_NN)
                     # print('gear',ego_car[i]._gear)
                     # if ego_car[i]._gear==3: 
                     #     ego_car[i].vehicle.get_control().manual_gear_shift = True
@@ -548,9 +560,9 @@ while True:
                 
 
         gear = ego_car[i]._gear
-        x_measure_list_previous = x_measure_list
-        u_implemented = input_acceleration
-        x_next_prediction_nom_list_previous = x_next_prediction_nom_list 
+        x_measure_list_previous = x_measure_list.copy()
+        u_implemented = input_acceleration.copy()
+        x_next_prediction_nom_list_previous = x_next_prediction_nom_list.copy()
 
 
         record_outer = run_time

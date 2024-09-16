@@ -1,10 +1,12 @@
-from utils.data_saver import DataSaver
+from data_saver import DataSaver
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import os
 from sklearn.model_selection import train_test_split
 import numpy as np
+from torch.utils.data import DataLoader, TensorDataset
+import matplotlib.pyplot as plt
 
 # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
 
@@ -100,6 +102,7 @@ class MyNeuralNetwork(nn.Module):
     def save_data(self, input_d,output_d):
         self.DataSaver_io.save_file(input_d,output_d)
 
+
     def save_model(self,filename="myNN"):
         """
         Save the model's state dictionary to a specified file path.
@@ -114,6 +117,15 @@ class MyNeuralNetwork(nn.Module):
         torch.save({ 'model_state_dict': self.state_dict(),
                   'normalization_params': normalization_params}, file_path+filename)
         print(f"Model saved to {file_path}")
+        
+        # Plot losses
+        plt.plot(self.training_losses, label='Training Loss')
+        plt.plot(self.validation_losses, label='Validation Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Training and Validation Loss Over Time')
+        plt.legend()
+        plt.savefig(file_path+ 'Train_Test_Loss_results.pdf', format='pdf')
 
     def load_model(self,filename="myNN"):
         """
@@ -131,11 +143,11 @@ class MyNeuralNetwork(nn.Module):
         self.eval()  # Set the model to evaluation mode
         print(f"Model loaded from {file_path}")
 
-    def train_network(self, epochs=1000):
+    def train_network(self, epochs=20,batch_size = 32):
         x, u, y_actual = self.load_and_slice_training_data()
         x_train, x_val, u_train, u_val, y_train, y_val = train_test_split(
             x, u, y_actual, test_size=0.2, random_state=30)
-        epochs = 3 * len(x)
+        # epochs = 3 * len(x)
         
         self.norm_mean_x = x_train.mean(dim=0)
         self.norm_std_x = x_train.std(dim=0)
@@ -149,18 +161,46 @@ class MyNeuralNetwork(nn.Module):
         normalized_u_val = (u_val - self.norm_mean_u) / self.norm_std_u
         # print('Normalization',self.norm_std_x,self.norm_mean_x)
         
+        # Create TensorDataset and DataLoader for batching
+        train_dataset = TensorDataset(normalized_x_train, normalized_u_train, y_train)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        
+        # Initialize arrays to store training and validation losses
+        self.training_losses = []
+        self.validation_losses = []
+        
         for epoch in range(epochs):
-            self.optimizer.zero_grad()
-            y_pred = self(normalized_x_train, normalized_u_train)
-            loss = self.criterion(y_pred, y_train)
-            loss.backward()
-            self.optimizer.step()
+            running_loss = 0.0
+            
+            # Training loop
+            for batch_x, batch_u, batch_y in train_loader:
+                self.optimizer.zero_grad()
+                y_pred = self(batch_x, batch_u)
+                loss = self.criterion(y_pred, batch_y)
+                loss.backward()
+                self.optimizer.step()
+                
+                # Accumulate training loss
+                running_loss += loss.item()
 
-            if epoch % 100 == 99:
-                print(f'Epoch {epoch + 1}, Loss: {loss.item()}')
-                self.validate_model(normalized_x_val,normalized_u_val,y_val)
+            # Calculate average training loss for the epoch
+            avg_training_loss = running_loss / len(train_loader)
+            self.training_losses.append(avg_training_loss)
+            
+            # Validation loss
+            self.eval()  # Switch to evaluation mode (if using dropout or batch norm)
+            with torch.no_grad():
+                y_val_pred = self(normalized_x_val, normalized_u_val)
+                val_loss = self.criterion(y_val_pred, y_val).item()
+            self.validation_losses.append(val_loss)
+            self.train()  # Switch back to training mode
 
-    
+            # Logging
+            if epoch % 5 == 4:
+                print(f'Epoch {epoch + 1}, Training Loss: {avg_training_loss}, Validation Loss: {val_loss}')
+                
+
+
     # Method to evaluate accuracy (MSE in this case)
     def validate_model(self, x_test, u_test, y_test):
         # Split the data into training and validation sets
@@ -172,10 +212,26 @@ class MyNeuralNetwork(nn.Module):
     
 
     def evaluate(self,x,u):
-        x=x.astype(np.float32)
-        u=u.astype(np.float32)
-        scalar_tensor = torch.tensor(u)
-        out=self.forward(torch.from_numpy(x),scalar_tensor.unsqueeze(0))
+    # Ensure x and u are in float32 for consistency
+        # x = x.astype(np.float32)
+        # u = u.astype(np.float32)
+
+        # Convert x and u to torch tensors
+        x = torch.tensor(x,dtype=torch.float32)
+        u = torch.tensor(u,dtype=torch.float32)
+
+        # # Ensure norm_mean_x and norm_std_x are tensors (convert if needed)
+        # norm_mean_x = torch.tensor(self.norm_mean_x)
+        # norm_std_x = torch.tensor(self.norm_std_x)
+        # norm_mean_u = torch.tensor(self.norm_mean_u)
+        # norm_std_u = torch.tensor(self.norm_std_u)
+
+        # Normalize x and u
+        normalized_x = (x - self.norm_mean_x) / self.norm_std_x
+        normalized_u = (u - self.norm_mean_u) / self.norm_std_u
+
+        # Pass normalized x and u into the model
+        out = self.forward(normalized_x, normalized_u.unsqueeze(0))
         
 
         return out.detach().numpy().T
@@ -218,57 +274,69 @@ class MyNeuralNetwork(nn.Module):
         u_h_k = numerator / denominator
 
         return u_h_k
+    
+    
+    ################################################## FOR Test ########################################
+    
+    
+    def generate_data(self, num_samples=1000):
+        x = np.random.rand(num_samples, 3)
+        u = np.random.rand(num_samples, 1)
+        def f_true(x):
+            return x[:, 0:1] + 2 * np.sin(x[:, 1:2]) + 3 * x[:, 2:3]
+        def g_true(x):
+            return 1 + 0.5 * x[:, 1:2]
+        y = f_true(x) + g_true(x) * u
+        return torch.tensor(x, dtype=torch.float32), torch.tensor(u, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
+    
+    def compare(self, x, u):
+        # Evaluate predictions for each sample
+        y_pred_nn = np.array([self.evaluate(x_i, u_i) for x_i, u_i in zip(x, u)])
+        y_pred_nn = y_pred_nn.flatten()  # Ensure y_pred_nn is a 1D array
+
+        def f_true(x):
+            return x[:, 0:1] + 2 * np.sin(x[:, 1:2]) + 3 * x[:, 2:3]
+        
+        def g_true(x):
+            return 1 + 0.5 * x[:, 1:2]
+        
+        y_true = f_true(x) + g_true(x) * u
+        y_true = y_true.flatten()  # Ensure y_true is a 1D array
+        
+        return y_true, y_pred_nn
+
         
 
 
 
-# Function to generate sample data
-def generate_sample_data(num_samples=1000):
-    # Randomly generate x, u, and the corresponding y = f(x) + g(x) * u
-    x = np.random.randn(num_samples, 3).astype(np.float32)  # x has 3 dimensions
-    u = np.random.randn(num_samples, 1).astype(np.float32)  # u is 1-dimensional
-    
-    # Here we're creating y as a simple function for demonstration, ideally this would be modeled data
-    y = (np.sum(x, axis=1, keepdims=True) + u).astype(np.float32)  # Dummy function for y = f(x) + g(x) * u
-    
-    # Convert x and u to PyTorch tensors
-    x_tensor = torch.tensor(x)
-    u_tensor = torch.tensor(u)
-    y_tensor = torch.tensor(y)
-    
-    # Combine x and u for saving as input
-    input_data = torch.cat((x_tensor, u_tensor), dim=1)
-    return input_data, y_tensor
+# Instantiate and use the network
+nn_model = MyNeuralNetwork()
 
-# Define a function to test the MyNeuralNetwork class
-def test_my_neural_network():
-    # Create the model instance
-    model = MyNeuralNetwork()
+# Generate and save data
+x, u, y = nn_model.generate_data(1000)
+input = torch.cat((x, u), dim=1) 
+nn_model.save_data(input, y)
 
-    # Generate sample data
-    input_data, output_data = generate_sample_data(num_samples=1000)
-    
-    # Save the data using the save_data method
-    model.save_data(input_data, output_data)
-    print("Sample data saved.")
+# Train the network
+nn_model.train_network()
 
-    # Load the data
-    x, u, y = model.load_and_slice_training_data()
-    print("Data loaded:", x.shape, u.shape, y.shape)
+# Evaluate and compare
+x_test, u_test, _ = nn_model.generate_data(100)
+y_true, y_pred_nn = nn_model.compare(x_test, u_test)
 
-    # Train the model
-    print("Training the model...")
-    model.train_network(epochs=100)
-    print("Training complete.")
-
-    # Evaluate on a new sample
-    sample_x = np.random.randn(3).astype(np.float32)  # A random sample of x
-    sample_u = np.random.randn(1).astype(np.float32)  # A random sample of u
-    result = model.evaluate(sample_x, sample_u)
-    print(f"Evaluation result: {result}")
+# Plot predictions vs. actual function
+plt.figure()
+plt.plot(y_true, label='True f(x, u)', color='blue')
+plt.plot(y_pred_nn, label='NN Prediction', linestyle='--', color='red')
+plt.legend()
+plt.title('Neural Network Predictions vs True Function')
+plt.xlabel('Sample index')
+plt.ylabel('Output')
+plt.show()
 
 
 
 
-# Run the test function
-# test_my_neural_network()
+
+
+
