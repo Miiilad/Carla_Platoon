@@ -270,7 +270,7 @@ class Objective():
 
 
 class SimResults():
-    def __init__(self, labels, max_length=10000, output_dir_path="./Simulation_Results", select={'states': 1}):
+    def __init__(self, labels,limits, max_length=10000, output_dir_path="./Simulation_Results", select={'states': 1}):
         self.max_length = max_length
         self.labels = labels  # Mixed list of strings and lists
         self.number_of_subplots = len(labels)  # Number of subplots
@@ -285,9 +285,9 @@ class SimResults():
         self.t = np.zeros(max_length)
         self.select = select
         self.output_dir_path = output_dir_path
-        self.pallet = ['c', 'r', 'g', 'b', 'm', '#E67E22', '#1F618D']
+        self.pallet = ['c', 'r--', 'g', 'b', 'm', '#E67E22', '#1F618D']
         self.cnt = 0
-        self.limits = [[-30,30],[-2,30],[-5,5],[-1.1,1.1],[[-5,5],[-5,5]]]
+        self.limits = limits
         
         if not os.path.exists(output_dir_path):
             os.makedirs(output_dir_path)
@@ -369,7 +369,7 @@ class SimResults_():
 
             for i, sublist in enumerate(self.labels):
                 for ii, label in enumerate(sublist):
-                    axes[i].plot(self.t[:self.cnt], self.y[i][ii, :self.cnt], self.pallet[ii % len(self.pallet)], label=label)
+                    axes[i].plot(self.t[:self.cnt], self.y[i][ii, :self.cnt], color = self.pallet[ii % len(self.pallet)],linestyle=':', label=label)
                 axes[i].set_xlabel('t (sec)')
                 axes[i].legend(loc='upper right')
                 axes[i].grid(True)

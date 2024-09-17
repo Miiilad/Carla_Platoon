@@ -1,4 +1,3 @@
-from data_saver import DataSaver
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -8,6 +7,10 @@ import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 import matplotlib.pyplot as plt
 
+try:
+    from utils.data_saver import DataSaver
+except:
+    pass
 # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
 
 class MyNeuralNetwork(nn.Module):
@@ -100,6 +103,7 @@ class MyNeuralNetwork(nn.Module):
         return all_x_data.float(), all_u_data.float(), all_output_data.float()
     
     def save_data(self, input_d,output_d):
+        print(input_d.dtype,output_d.dtype)
         self.DataSaver_io.save_file(input_d,output_d)
 
 
@@ -145,6 +149,9 @@ class MyNeuralNetwork(nn.Module):
 
     def train_network(self, epochs=20,batch_size = 32):
         x, u, y_actual = self.load_and_slice_training_data()
+        for i in range(50):
+            print(x[i,:],u[i],y_actual[i])
+
         x_train, x_val, u_train, u_val, y_train, y_val = train_test_split(
             x, u, y_actual, test_size=0.2, random_state=30)
         # epochs = 3 * len(x)
@@ -196,10 +203,10 @@ class MyNeuralNetwork(nn.Module):
             self.train()  # Switch back to training mode
 
             # Logging
-            if epoch % 5 == 4:
+            if epoch % 1 == 0:
                 print(f'Epoch {epoch + 1}, Training Loss: {avg_training_loss}, Validation Loss: {val_loss}')
                 
-
+        return x_train, u_train,y_train
 
     # Method to evaluate accuracy (MSE in this case)
     def validate_model(self, x_test, u_test, y_test):
@@ -217,15 +224,15 @@ class MyNeuralNetwork(nn.Module):
         # u = u.astype(np.float32)
 
         # Convert x and u to torch tensors
-        x = torch.tensor(x,dtype=torch.float32)
-        u = torch.tensor(u,dtype=torch.float32)
+        # x = torch.tensor(x,dtype=torch.float32)
+        # u = torch.tensor(u,dtype=torch.float32)
 
         # # Ensure norm_mean_x and norm_std_x are tensors (convert if needed)
         # norm_mean_x = torch.tensor(self.norm_mean_x)
         # norm_std_x = torch.tensor(self.norm_std_x)
         # norm_mean_u = torch.tensor(self.norm_mean_u)
         # norm_std_u = torch.tensor(self.norm_std_u)
-
+        
         # Normalize x and u
         normalized_x = (x - self.norm_mean_x) / self.norm_std_x
         normalized_u = (u - self.norm_mean_u) / self.norm_std_u
@@ -279,60 +286,57 @@ class MyNeuralNetwork(nn.Module):
     ################################################## FOR Test ########################################
     
     
-    def generate_data(self, num_samples=1000):
-        x = np.random.rand(num_samples, 3)
-        u = np.random.rand(num_samples, 1)
+    def generate_data(self, num_samples=400):
+        x = np.random.randn(num_samples, 3)
+        u = np.random.randn(num_samples, 1)
         def f_true(x):
+            return x[:, 2:3]
             return x[:, 0:1] + 2 * np.sin(x[:, 1:2]) + 3 * x[:, 2:3]
         def g_true(x):
+            return 0
             return 1 + 0.5 * x[:, 1:2]
         y = f_true(x) + g_true(x) * u
         return torch.tensor(x, dtype=torch.float32), torch.tensor(u, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
     
-    def compare(self, x, u):
+    def compare(self, x, u,y_true):
         # Evaluate predictions for each sample
         y_pred_nn = np.array([self.evaluate(x_i, u_i) for x_i, u_i in zip(x, u)])
         y_pred_nn = y_pred_nn.flatten()  # Ensure y_pred_nn is a 1D array
 
-        def f_true(x):
-            return x[:, 0:1] + 2 * np.sin(x[:, 1:2]) + 3 * x[:, 2:3]
-        
-        def g_true(x):
-            return 1 + 0.5 * x[:, 1:2]
-        
-        y_true = f_true(x) + g_true(x) * u
         y_true = y_true.flatten()  # Ensure y_true is a 1D array
         
         return y_true, y_pred_nn
 
         
+if __name__ == "__main__":
+    from data_saver import DataSaver
+
+    # Instantiate and use the network
+    nn_model = MyNeuralNetwork()
+
+    # Generate and save data
+    x, u, y = nn_model.generate_data(1000)
+    input = torch.cat((x, u), dim=1) 
+    nn_model.save_data(input, y)
+
+    # Train the network
+    x,u,y=nn_model.train_network()
+
+    # Evaluate and compare
+    # x_test, u_test, y_true = nn_model.generate_data(100)
 
 
+    y_true, y_pred_nn = nn_model.compare(x[:100,:], u[:100],y[:100])
 
-# Instantiate and use the network
-nn_model = MyNeuralNetwork()
-
-# Generate and save data
-x, u, y = nn_model.generate_data(1000)
-input = torch.cat((x, u), dim=1) 
-nn_model.save_data(input, y)
-
-# Train the network
-nn_model.train_network()
-
-# Evaluate and compare
-x_test, u_test, _ = nn_model.generate_data(100)
-y_true, y_pred_nn = nn_model.compare(x_test, u_test)
-
-# Plot predictions vs. actual function
-plt.figure()
-plt.plot(y_true, label='True f(x, u)', color='blue')
-plt.plot(y_pred_nn, label='NN Prediction', linestyle='--', color='red')
-plt.legend()
-plt.title('Neural Network Predictions vs True Function')
-plt.xlabel('Sample index')
-plt.ylabel('Output')
-plt.show()
+    # Plot predictions vs. actual function
+    plt.figure()
+    plt.plot(y_true, label='True f(x, u)', color='blue')
+    plt.plot(y_pred_nn, label='NN Prediction', linestyle='--', color='red')
+    plt.legend()
+    plt.title('Neural Network Predictions vs True Function')
+    plt.xlabel('Sample index')
+    plt.ylabel('Output')
+    plt.show()
 
 
 
