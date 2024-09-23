@@ -5,6 +5,8 @@ from scipy.optimize import minimize
 import gurobipy as gp
 from gurobipy import GRB
 import os
+import matplotlib.gridspec as gridspec
+import torch
 
 class Control():
     def __init__(self, h, prediction_H, control_H, Objective):
@@ -17,19 +19,25 @@ class Control():
         self.dim_n=3
 
         self.Objective = Objective
+        # self.A = np.array([[0, 1, -1.6],
+        #               [0, 0, -1],
+        #               [0, 0, -2.17391304]])
+        # self.B = np.array([[0],
+        #               [0],
+        #               [1.59130435]])
 
-        A = np.array([[0, 1, -1.6],
+        self.A = np.array([[0, 1, -1.6],
                       [0, 0, -1],
                       [0, 0, -2.17391304]])
-        B = np.array([[0],
+        self.B = np.array([[0],
                       [0],
                       [1.59130435]])
-        H=np.array([[0],
+        self.H=np.array([[0],
                     [1],
                     [0]])
-        self.Ad = A * h + np.eye(3)
-        self.Bd = B * h
-        self.Hd= H * h 
+        self.Ad = self.A * h + np.eye(3)
+        self.Bd = self.B * h
+        self.Hd= self.H * h 
 
         self.x_predict_sequence=[]
         self.u_pre = 0.0
@@ -118,14 +126,8 @@ class Control():
     
     def eval_nominal_vehicle(self,x,u):
         
-        A = np.array([[0, 1, -1.6],
-                      [0, 0, -1],
-                      [0, 0, -2.17391304]])
-        B = np.array([[0],
-                      [0],
-                      [1.59130435]])
-        Ad = A * self.h + np.eye(3)
-        Bd = B * self.h
+        Ad = self.A * self.h + np.eye(3)
+        Bd = self.B * self.h
         x=np.array(x)
         x_next=(Ad @ x).reshape(self.dim_n,1) + (Bd * u )
         return x_next.reshape(self.dim_n)
@@ -246,6 +248,114 @@ class Control():
         phi3=2*a_dot*dd-2*dv_dot*dv-4*dv_dot*dv+k3*phi2
         
         return phi3
+    
+    def find_closest_sample(self,x_k, X_s):
+        """
+        Finds the closest sample in X_s to x_k using the Euclidean norm.
+        
+        Parameters:
+        x_k : array-like or tensor
+            A single input sample.
+        X_s : tensor
+            A set of input samples (tensor where each row is a sample).
+            
+        Returns:
+        closest_sample : array
+            The sample in X_s that is closest to x_k.
+        """
+        # Convert tensor inputs to numpy arrays
+        if isinstance(x_k, torch.Tensor):
+            x_k = x_k.numpy()
+        
+        if isinstance(X_s, torch.Tensor):
+            X_s = X_s.numpy()
+        
+        # Compute Euclidean distance between x_k and each sample in X_s
+        distances = np.linalg.norm(X_s - x_k, axis=1)
+        
+        # Find the index of the minimum distance
+        closest_idx = np.argmin(distances)
+        
+        # Return the closest sample
+        return closest_idx
+    
+    def solve_BF_for_u(self,u,u_lim, x_k, x_s, u_s, a_k, delta_v_k, delta_p_k, a_k_minus_1,  Delta_a_k_minus_1):
+        """
+        Solves for u_k given input vectors x_k, x_s and scalar values using Gurobi, handling abs() using auxiliary variables.
+        
+        Parameters are the same as before.
+        
+        Returns:
+        u_k: float
+            The optimized scalar value for u_k
+        """
+        tau = self.h
+        k1, k2, k3 = 1, 1, 1
+        varrho_g, varrho_f = 0.1, 0.1
+        B_d = self.Bd[2,0]
+        d_min = 10
+        
+        if isinstance(x_s, torch.Tensor):
+            x_s = x_s.numpy()
+        if isinstance(u_s, torch.Tensor):
+            u_s = u_s.numpy()
+         # Create a Gurobi model
+        model = gp.Model("qp")
+        # m.params.NonConvex = 2
+        Us = model.addMVar(shape=(self.dim_m, 1), lb=list(u_lim[0]*np.ones((self.dim_m, self.dim_m))),
+                       ub=list(u_lim[1]*np.ones((self.dim_m, self.dim_m))), name="U")
+        
+        # Define the objective function
+        objective = (u - Us) * (u - Us)
+        model.Params.LogToConsole = 0
+        model.Params.FeasibilityTol = 1e-3
+        model.setObjective(objective, GRB.MINIMIZE)
+
+        # Define the decision variable u_k
+        u_k = model.addVar(lb=-GRB.INFINITY, ub=GRB.INFINITY, name="u_k")
+
+        # Auxiliary variable for |u_k - u_s|
+        z_k = model.addVar(lb=0.0, name="z_k")
+
+        # Precompute norms and other scalar values outside the constraint
+        norm_x_k = np.linalg.norm(x_k)
+        norm_x_k_x_s = np.linalg.norm(x_k - x_s)
+        norm_x_s = np.linalg.norm(x_s)  # Precompute norm of x_s
+        
+        # Add constraints to handle the absolute value: z_k = |u_k - u_s|
+        model.addConstr(z_k >= u_k - u_s, "abs_pos")
+        model.addConstr(z_k >= -(u_k - u_s), "abs_neg")
+        
+
+        # Define the constraint equation using Gurobi LinExpr
+        lhs = gp.LinExpr()  # Create a Gurobi linear expression
+        lhs.add(B_d * u_k)  # Add terms to the linear expression
+        lhs.add(varrho_g * norm_x_k * z_k)
+        lhs.add(varrho_g * norm_x_k_x_s * abs(u_s))  # abs(u_s) can be calculated directly since it's a scalar
+        lhs.add(varrho_f * norm_x_k_x_s)
+        lhs.add(-B_d * u_s)
+        lhs.add(norm_x_s)
+        lhs.add(-a_k)
+        lhs.add(Delta_a_k_minus_1)
+        lhs.add((k1 + k2 + k3) * (a_k - a_k_minus_1))
+        lhs.add(- (k3 * k1 + k3 * k2 + k2 * k1) / tau * delta_v_k)
+        lhs.add(- k3 * k2 * k1 / tau**2 * (delta_p_k - d_min))
+
+        # Add the constraint to the model
+        model.addConstr(lhs <= 0.0, "constraint")
+
+        try:
+            # Solve the model
+            model.optimize()
+
+            # Get the optimal value of Us
+            optimal_Us = Us.X
+            print("Unsafe control",u,"Optimal value of U safe:", optimal_Us)
+            out=optimal_Us.reshape(self.dim_m)[0]
+        except:
+            print("Unsafe control",u,"safe control is infeasibe!")
+            out=u
+        return out
 
 
 class Objective():
@@ -269,8 +379,10 @@ class Objective():
 
 
 
+
+
 class SimResults():
-    def __init__(self, labels,limits, max_length=10000, output_dir_path="./Simulation_Results", select={'states': 1}):
+    def __init__(self, labels,limits,linestyles, max_length=10000, output_dir_path="./Simulation_Results", select={'states': 1}):
         self.max_length = max_length
         self.labels = labels  # Mixed list of strings and lists
         self.number_of_subplots = len(labels)  # Number of subplots
@@ -285,9 +397,11 @@ class SimResults():
         self.t = np.zeros(max_length)
         self.select = select
         self.output_dir_path = output_dir_path
-        self.pallet = ['c', 'r--', 'g', 'b', 'm', '#E67E22', '#1F618D']
+        self.pallet = ['c', 'r--', 'g--', 'b', 'm', '#E67E22', '#1F618D']
+        self.pallet = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
         self.cnt = 0
         self.limits = limits
+        self.linestyles = linestyles
         
         if not os.path.exists(output_dir_path):
             os.makedirs(output_dir_path)
@@ -311,7 +425,7 @@ class SimResults():
         # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>PLOT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         if self.select['states']:
             fig, axes = plt.subplots(self.number_of_subplots, 1, figsize=(15, 20))
-            fig.tight_layout(pad=0.5)
+            fig.tight_layout(pad=2)
 
             for i, label in enumerate(self.labels):
                 if isinstance(label, list):
@@ -331,54 +445,84 @@ class SimResults():
 
             plt.grid(color='k', linestyle=':', linewidth=1)
             plt.savefig(self.output_dir_path + '/fig_states_control{}.pdf'.format(j), format='pdf')
-
-
-
-
-
-
-
-
-
-
-
-class SimResults_():
-    def __init__(self, labels, max_length=10000, output_dir_path="./Simulation_Results", select={'states': 1}):
-        self.max_length = max_length
-        self.number = 5
-        self.t = np.zeros(max_length)
-        self.y = np.zeros((self.number,max_length))
-        self.labels = labels
-        self.select = select
-        self.output_dir_path = output_dir_path
-        self.pallet = ['c','r', 'g', 'b', 'm', '#E67E22', '#1F618D']
-        self.cnt = 0 
-        
-        if not os.path.exists(output_dir_path):
-            os.makedirs(output_dir_path)
-        
-    def record_state(self, t, y):
-        self.y[:, self.cnt] = np.copy(y)
-        self.t[self.cnt ] = t
-        self.cnt +=1
-    
-    def graph(self, j):
+            
+    def graph_(self, j):
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>PLOT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         if self.select['states']:
-            fig, axes = plt.subplots(self.number_of_subplots, 1, figsize=(10, 6))
-            fig.tight_layout(pad=3.0)
+            # Create a grid layout with flexible heights
+            heights = [2 if isinstance(label, list) else 1 for label in self.labels]  # Give more height to subplots with multiple labels
+            fig = plt.figure(figsize=(15, 20))
+            gs = gridspec.GridSpec(self.number_of_subplots, 1, height_ratios=heights)
+            
+            axes = [fig.add_subplot(gs[i]) for i in range(self.number_of_subplots)]
+            fig.tight_layout(pad=2)
 
-            for i, sublist in enumerate(self.labels):
-                for ii, label in enumerate(sublist):
-                    axes[i].plot(self.t[:self.cnt], self.y[i][ii, :self.cnt], color = self.pallet[ii % len(self.pallet)],linestyle=':', label=label)
+            for i, label in enumerate(self.labels):
+                if isinstance(label, list):
+                    # Plot multiple signals in one subplot
+                    for ii, sublabel in enumerate(label):
+                        axes[i].plot(self.t[:self.cnt], self.y[i][ii, :self.cnt], self.pallet[ii % len(self.pallet)],linestyle=self.linestyles[i][ii], label=sublabel)
+                    axes[i].legend(loc='upper right')
+                    axes[i].set_ylim(self.limits[i][ii][0], self.limits[i][ii][1])
+                else:
+                    # Plot single signal in a subplot
+                    axes[i].plot(self.t[:self.cnt], self.y[i][0, :self.cnt], self.pallet[0],linestyle=self.linestyles[i], label=label)
+                    axes[i].set_ylim(self.limits[i][0], self.limits[i][1])
+
                 axes[i].set_xlabel('t (sec)')
-                axes[i].legend(loc='upper right')
+                axes[i].set_ylabel(', '.join(label) if isinstance(label, list) else label)
                 axes[i].grid(True)
 
             plt.grid(color='k', linestyle=':', linewidth=1)
-            plt.savefig(self.output_dir_path +
-                        '/fig_states_control{}.pdf'.format(j), format='pdf')
-            # plt.close(fig1)
-            # plt.show()
+            plt.savefig(self.output_dir_path + '/fig_states_control{}.pdf'.format(j), format='pdf')
+
+
+
+
+
+
+
+
+
+
+
+# class SimResults_():
+#     def __init__(self, labels, max_length=10000, output_dir_path="./Simulation_Results", select={'states': 1}):
+#         self.max_length = max_length
+#         self.number = 5
+#         self.t = np.zeros(max_length)
+#         self.y = np.zeros((self.number,max_length))
+#         self.labels = labels
+#         self.select = select
+#         self.output_dir_path = output_dir_path
+#         self.pallet = ['c','r', 'g', 'b', 'm', '#E67E22', '#1F618D']
+#         self.cnt = 0 
+        
+#         if not os.path.exists(output_dir_path):
+#             os.makedirs(output_dir_path)
+        
+#     def record_state(self, t, y):
+#         self.y[:, self.cnt] = np.copy(y)
+#         self.t[self.cnt ] = t
+#         self.cnt +=1
+    
+#     def graph(self, j):
+#         if self.select['states']:
+#             fig, axes = plt.subplots(self.number_of_subplots, 1, figsize=(10, 6))
+#             fig.tight_layout(pad=3.0)
+
+#             for i, sublist in enumerate(self.labels):
+#                 for ii, label in enumerate(sublist):
+#                     axes[i].plot(self.t[:self.cnt], self.y[i][ii, :self.cnt], color = self.pallet[ii % len(self.pallet)],linestyle=':', label=label)
+#                 axes[i].set_xlabel('t (sec)')
+#                 axes[i].legend(loc='upper right')
+#                 axes[i].grid(True)
+
+#             plt.grid(color='k', linestyle=':', linewidth=1)
+#             plt.savefig(self.output_dir_path +
+#                         '/fig_states_control{}.pdf'.format(j), format='pdf')
+#             # plt.close(fig1)
+#             # plt.show()
 
 
 

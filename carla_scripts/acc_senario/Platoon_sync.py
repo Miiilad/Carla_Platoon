@@ -51,7 +51,7 @@ fixed_delta_seconds = 1/200 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 0,'save_data':1, 'load_model':1, 'train_model': 1, 'save_model':1,'run_simulation': 1,  'random_spawn':0}
+setting={"CBF" : 0,'save_data':1, 'load_data':1, 'load_model':1, 'train_model': 0, 'save_model':1,'run_simulation': 1,  'random_spawn':0}
 
 # attacker
 from utils.attacker import configs
@@ -69,7 +69,8 @@ attacker = FDI_attacker(configs=configs)
 attack_time = np.inf # the time to start the attack
 
 # Initialize and train the network
-net = MyNeuralNetwork(path="./data/dodge/")
+dim_n = 4
+net = MyNeuralNetwork(n=dim_n,path="./data/dodge/")
 
 
 if setting["load_model"]:
@@ -80,13 +81,17 @@ if setting["load_model"]:
         print('Model not found')
         loaded_NN_model =False
 
-
+# net.train_network()
 if setting["train_model"]:
     try: 
-        
         net.train_network()
         if setting["save_model"]: net.save_model()
         loaded_NN_model =True
+    except: 
+        print('Data not found')
+if setting["load_data"]:
+    try: 
+        x_data,u_data, output_data = net.load_and_slice_training_data()
     except: 
         print('Data not found')
 
@@ -179,7 +184,6 @@ ego_car=[]
 route_ego=[]
 previous_loc_rot = []
 for i in range(len_of_platoon):
-    print(i)
     forward_vector = reference_vehicle_transform.rotation.get_forward_vector()
     spawn_distance = 10.0
     new_position = reference_vehicle_transform.location - spawn_distance * forward_vector
@@ -329,10 +333,11 @@ def loop_5ms_loop(previous_loc_rot,loop_name="5ms loop", run_time=None):
         
         #Measure Slope of road and yaw_rate as disturbance
         slope = ego_car[i].calculate_slope(previous_loc_rot[i].location,current_loc_rot.location)
-        yaw_rate = ego_car[i].calculate_yaw_rate(previous_loc_rot[i].rotation,current_loc_rot.rotation)
+        # yaw_rate = ego_car[i].calculate_yaw_rate(previous_loc_rot[i].rotation,current_loc_rot.rotation)
+        yaw_rate = ego_car[i].imu_data.gyroscope.z
         
         # print(yaw_rate)
-        x_k_list.append(np.array([slope, ego_car[i].get_speed(),imu_data[i][0]])) 
+        x_k_list.append(np.array([ ego_car[i].get_speed(),imu_data[i][0],slope,yaw_rate])) 
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
         data_to_send["custom2"]["acceleration without filtered"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x#ego_car[i]._acceleration.x
         # get the yaw angle of the vehicle
@@ -391,7 +396,7 @@ def outer_control_loop(x_measure_list,loop_name="10ms loop", target_distance=10,
     location_front_vehicle = lead_car.vehicle.get_transform().location
     velocity_front_vehicle = lead_car.get_speed()
     acceleration_front_vehicle = acceleration_lead
-    x_next_prediction_nom_list=[]
+    x_prediction_nom_list=[]
    
     speed_attacked_list = []
     
@@ -427,12 +432,17 @@ def outer_control_loop(x_measure_list,loop_name="10ms loop", target_distance=10,
         u_pre_list[i] = input_acceleration[i]
 
         #Record samples for learning
-
-        x_next_prediction_nom_list.append(Controller_mpc[i].eval_nominal_vehicle(x_measure_list[i], input_acceleration[i]))
+        #Position is not used and we will only need predeiciton on acceleration 
+        x_prediction_nom_list.append(Controller_mpc[i].eval_nominal_vehicle(np.append(0,x_measure_list[i][:2]), input_acceleration[i]))
         
 
         #Calculate the safe control through optimization
-        if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x_measure_list[i],input_acceleration[i],acceleration_front_vehicle,u_lim)
+        if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x_measure_list[i][:3],input_acceleration[i],acceleration_front_vehicle,u_lim)
+        
+        
+        closest_idx = Controller_mpc[i].find_closest_sample(x_data,x_measure_list[i])
+        u_BF = Controller_mpc[i].solve_BF_for_u(input_acceleration[i],u_lim, x_measure_list[i],x_data[closest_idx],u_data[closest_idx],acceleration_list[i],velocity_error,distance_error,acceleration_front_vehicle,3)
+        print(u_BF)
         
         # print(">>>>",i, input_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
@@ -450,7 +460,7 @@ def outer_control_loop(x_measure_list,loop_name="10ms loop", target_distance=10,
     data_to_send["custom data"]["lead_car_speed"] = lead_car.get_speed()
     
 
-    return done, input_acceleration, x_measure_list, x_next_prediction_nom_list
+    return done, input_acceleration, x_measure_list, x_prediction_nom_list
 
 
 
@@ -481,8 +491,12 @@ prediction_H = 20
 control_H = 10
 u_lim= [-1,1]
 Controller_mpc = [Control(h, prediction_H, control_H, Objective) for i in range(len_of_platoon)]
-sim_results = SimResults(["Slope","Velocity","Acceleration","Input-ThBr",["Output True","Output Predition"]],
-                         [[-30,30],[-2,30],[-5,5],[-1.1,1.1],[[-5,5],[-5,5]]],
+
+
+
+sim_results = SimResults(["Velocity","Acceleration","Slope","Yaw Rate","Input-ThBr",["True acceleration","Predicted","Nominal"]],
+                         [[-2,30],[-5,5],[-30,30],[-1,1],[-1.1,1.1],[[-5,5],[-5,5],[-5,5]]],
+                         ['-','-','-','-','-',['-','--','--']],
                          max_length = int(sim_duration/h))
 acceleration_list=[0]*len_of_platoon
 acceleration_lead=0
@@ -524,59 +538,53 @@ while True:
 
     if run_time - record_outer >= 0.1:
         # loop for speed control
-        done,input_acceleration, x_measure_list, x_next_prediction_nom_list = outer_control_loop(x_k_list,target_distance=target_dist, run_time=run_time)
+        done,input_acceleration, x_measure_list, x_prediction_nom_list = outer_control_loop(x_k_list,target_distance=target_dist, run_time=run_time)
 
         if len(x_measure_list_previous) > 0:
             for i in range(len_of_platoon):
                 safe_distance_for_data=7
-                if 1:
-                    input_ = np.append(x_measure_list_previous[i],u_implemented[i])
-                    
-                    # output= x_measure_list[i][2] #- x_next_prediction_nom_list_previous[i][2]
-                    output_= x_measure_list_previous[i][2] #+ u_implemented[i] #- x_next_prediction_nom_list_previous[i][2]
-                    
-                    # print('input:',input, 'output',output)
+                
+                if gear == 3:
+                    #This learns increaments on acceleration i.e dx. 
+                    input = np.append(x_measure_list_previous[i],u_implemented[i])
+                    output = [x_measure_list[i][1]-x_prediction_nom_list[i][2]]
 
 
-                    if gear == 3:
-                        # input = np.random.randn(4)
-                        # output = [input[2]]
-                        input = np.append(x_measure_list_previous[i],u_implemented[i])
-                        output = [x_measure_list[i][2]-x_measure_list_previous[i][2]]
-     
-                        data_collected_input.append(input)
-                        data_collected_output.append(output)
-                    
-                    
-                    # print(output[2], output_NN_evaluate,'\n')
-                    # print("obsreved",x_observed[i]-x_prediction_nom[i],x_observed[i]-x_prediction_net-x_prediction_nom[i])
-                    # print(x_k_list[i].tolist()+[output[2]]+output_NN_evaluate.tolist())
-                    if (gear == 3) and loaded_NN_model:
-                        x_ = torch.tensor(input[:3], dtype=torch.float32)
-                        u_ = torch.tensor(input[3:4], dtype=torch.float32)
-                        out_NN = net.evaluate(x_,u_).flatten().tolist()
-                    else: 
-                        out_NN = [0.]
-                    # print(x_k_list[i].tolist()+[input_acceleration[i]]+[output]+out_NN)
-                    # print('Record input:',input[:-1],input[-1], 'output',output, 'outputNN', out_NN)
+    
+                    data_collected_input.append(input)
+                    data_collected_output.append(output)
+                
+                
 
-                    sim_results.record_state(run_time,x_k_list[i].tolist()+[input_acceleration[i]] +output+out_NN)
+                if (gear == 3) and loaded_NN_model:
+                    x_ = torch.tensor(input[:dim_n], dtype=torch.float32)
 
-                    # print('gear',ego_car[i]._gear)
-                    # if ego_car[i]._gear==3: 
-                    #     ego_car[i].vehicle.get_control().manual_gear_shift = True
-                    #     ego_car[i].vehicle.get_control().gear = 3
-                    #     ego_car[i]._set_gear(3)
-                else:
-                    pass
-                    # print(i,'th: TOO CLOSE!')
+                    u_ = torch.tensor(input[dim_n:dim_n+1], dtype=torch.float32)
+                    out_NN = net.evaluate(x_,u_).flatten().tolist()
+                    ground_truth = [x_measure_list[i][1]]
+                    nominal = [x_prediction_nom_list[i][2]]
+                    prediction = [out_NN[0]+x_prediction_nom_list[i][2]]
+                else: 
+                    out_NN = [0.]
+                    ground_truth = [0.]
+                    nominal = [0]
+                    prediction = [0]
+
+
+                sim_results.record_state(run_time,x_k_list[i].tolist()+[input_acceleration[i]] + ground_truth + prediction + nominal)
+
+
+                # if ego_car[i]._gear==3: 
+                #     ego_car[i].vehicle.get_control().manual_gear_shift = True
+                #     ego_car[i].vehicle.get_control().gear = 3
+                #     ego_car[i]._set_gear(3)
+
                     
                 
         
         gear = ego_car[i]._gear
         x_measure_list_previous = x_measure_list.copy()
         u_implemented = input_acceleration.copy()
-        x_next_prediction_nom_list_previous = x_next_prediction_nom_list.copy()
 
 
         record_outer = run_time
@@ -592,8 +600,6 @@ while True:
 
     
     # check if local planner reach the end
-    # print(f"run time: {run_time}")
-    # print(f"ego car location: {ego_car[0]._location}")
     # <<<<<<<<<<<<<<<<<<<<<< run the loop <<<<<<<<<<<<<<<<<<<<<<
 
 
@@ -621,8 +627,8 @@ while True:
         data_collected_output = np.array(data_collected_output).reshape(len(data_collected_output),1)
 
         
-        x=torch.tensor(data_collected_input[:,:3], dtype=torch.float32)
-        u=torch.tensor(data_collected_input[:,3:4], dtype=torch.float32)
+        x=torch.tensor(data_collected_input[:,:dim_n], dtype=torch.float32)
+        u=torch.tensor(data_collected_input[:,dim_n:dim_n+1], dtype=torch.float32)
         y= torch.tensor(data_collected_output, dtype=torch.float32)
         input = torch.cat((x, u), dim=1) 
         
@@ -640,7 +646,7 @@ lead_car.destroy()
 
 
 # save graphs
-sim_results.graph(0)
+sim_results.graph_(0)
 # save the data
 df.to_csv('/home/docker/carla_scripts/datas.csv')
 
