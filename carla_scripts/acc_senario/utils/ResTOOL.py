@@ -279,7 +279,7 @@ class Control():
         # Return the closest sample
         return closest_idx
     
-    def solve_BF_for_u(self,u,u_lim, x_k, x_s, u_s, a_k, delta_v_k, delta_p_k, a_k_minus_1,  Delta_a_k_minus_1):
+    def solve_BF_for_u(self,u,u_lim, x_k, x_s_next, x_s, u_s, a_k, delta_v_k, delta_p_k, a_k_i_minus_1,  Delta_a_k_i_minus_1):
         """
         Solves for u_k given input vectors x_k, x_s and scalar values using Gurobi, handling abs() using auxiliary variables.
         
@@ -290,26 +290,23 @@ class Control():
             The optimized scalar value for u_k
         """
         tau = self.h
-        k1, k2, k3 = 1, 1, 1
-        varrho_g, varrho_f = 0.1, 0.1
+        k1, k2, k3 = 10, 10, 10
+        varrho_g, varrho_f = 0.001, 0.001
         B_d = self.Bd[2,0]
-        d_min = 10
+        d_min = 5
+        M = 1e6  # Big-M constant (sufficiently large)
         
         if isinstance(x_s, torch.Tensor):
             x_s = x_s.numpy()
         if isinstance(u_s, torch.Tensor):
             u_s = u_s.numpy()
-         # Create a Gurobi model
+        if isinstance(x_s_next, torch.Tensor):
+            x_s_next = x_s_next.numpy()
+        # Create a Gurobi model
         model = gp.Model("qp")
-        # m.params.NonConvex = 2
-        Us = model.addMVar(shape=(self.dim_m, 1), lb=list(u_lim[0]*np.ones((self.dim_m, self.dim_m))),
-                       ub=list(u_lim[1]*np.ones((self.dim_m, self.dim_m))), name="U")
-        
-        # Define the objective function
-        objective = (u - Us) * (u - Us)
+        # model.Params.NonConvex = 2
         model.Params.LogToConsole = 0
         model.Params.FeasibilityTol = 1e-3
-        model.setObjective(objective, GRB.MINIMIZE)
 
         # Define the decision variable u_k
         u_k = model.addVar(lb=-GRB.INFINITY, ub=GRB.INFINITY, name="u_k")
@@ -317,44 +314,272 @@ class Control():
         # Auxiliary variable for |u_k - u_s|
         z_k = model.addVar(lb=0.0, name="z_k")
 
+        # New variable to measure the violation of the constraint
+        violation = model.addVar(lb=0.0, name="violation")
+
+        # Binary variable to switch between the cases
+        b_k = model.addVar(vtype=GRB.BINARY, name="b_k")
+
+        # Define the objective function
+        # Minimize the difference between u and u_k, plus a penalty for constraint violation
+        penalty_weight = 10  # Adjust this weight to control the penalty
+        objective = (u - u_k) * (u - u_k) + penalty_weight * violation
+        model.setObjective(objective, GRB.MINIMIZE)
         # Precompute norms and other scalar values outside the constraint
         norm_x_k = np.linalg.norm(x_k)
         norm_x_k_x_s = np.linalg.norm(x_k - x_s)
-        norm_x_s = np.linalg.norm(x_s)  # Precompute norm of x_s
-        
-        # Add constraints to handle the absolute value: z_k = |u_k - u_s|
-        model.addConstr(z_k >= u_k - u_s, "abs_pos")
-        model.addConstr(z_k >= -(u_k - u_s), "abs_neg")
-        
+
+        # Big-M constraints to enforce z_k = |u_k - u_s|
+        # Case 1: If b_k = 1, z_k = u_k - u_s
+        model.addConstr(z_k >= (u_k - u_s) , "abs_pos_1")
+        model.addConstr(z_k <= (u_k - u_s) + M * (1 - b_k), "abs_pos_2")
+
+        # Case 2: If b_k = 0, z_k = u_s - u_k
+        model.addConstr(z_k >= (-u_k + u_s), "abs_neg_1")
+        model.addConstr(z_k <= (-u_k + u_s) + M * b_k, "abs_neg_2")
 
         # Define the constraint equation using Gurobi LinExpr
-        lhs = gp.LinExpr()  # Create a Gurobi linear expression
-        lhs.add(B_d * u_k)  # Add terms to the linear expression
-        lhs.add(varrho_g * norm_x_k * z_k)
-        lhs.add(varrho_g * norm_x_k_x_s * abs(u_s))  # abs(u_s) can be calculated directly since it's a scalar
+        lhs = gp.LinExpr()
+        lhs.add(B_d * u_k)
+        lhs.add(varrho_g * norm_x_k * z_k)  # Involving z_k which is now |u_k - u_s|
+        lhs.add(varrho_g * norm_x_k_x_s * abs(u_s[0]))  # abs(u_s) because it's a scalar
         lhs.add(varrho_f * norm_x_k_x_s)
-        lhs.add(-B_d * u_s)
-        lhs.add(norm_x_s)
+        lhs.add(-B_d * u_s[0])
+        lhs.add(x_s_next[0])
         lhs.add(-a_k)
-        lhs.add(Delta_a_k_minus_1)
-        lhs.add((k1 + k2 + k3) * (a_k - a_k_minus_1))
-        lhs.add(- (k3 * k1 + k3 * k2 + k2 * k1) / tau * delta_v_k)
-        lhs.add(- k3 * k2 * k1 / tau**2 * (delta_p_k - d_min))
+        lhs.add(Delta_a_k_i_minus_1)
+        lhs.add((k1 + k2 + k3) * (a_k - a_k_i_minus_1))
+        lhs.add(- (k3 * k1 + k3 * k2 + k2 * k1) / (tau**-1) * delta_v_k)
+        lhs.add(- k3 * k2 * k1 / (tau**-2) * (delta_p_k - d_min))
 
         # Add the constraint to the model
-        model.addConstr(lhs <= 0.0, "constraint")
+        model.addConstr(lhs - violation <= 0.0, "constraint")
+        
+        # Add a constraint to limit the violation to a certain threshold
+        max_violation = 100  # Set a maximum allowable violation
+        model.addConstr(violation <= max_violation, "violation_limit")
+        
+        # Solve the model
+
 
         try:
             # Solve the model
             model.optimize()
+            # print(u,u_k.X,u_s)
+            # Perform the operations and print each step
+            print('u_k:',u_k.X,'    u:', u,'    u_s',u_s, '     z_k:',z_k.X,'    violation:',violation.X)
+            lhs_sum = 0
+            B_d_u_k = B_d * u_k.X
+            print("B_d * u_k:", B_d_u_k)
+            lhs_sum += B_d_u_k
 
-            # Get the optimal value of Us
-            optimal_Us = Us.X
-            print("Unsafe control",u,"Optimal value of U safe:", optimal_Us)
-            out=optimal_Us.reshape(self.dim_m)[0]
-        except:
-            print("Unsafe control",u,"safe control is infeasibe!")
-            out=u
+            varrho_g_norm_x_k_z_k = varrho_g * norm_x_k * z_k.X  # z_k = |u_k - u_s|
+            print("varrho_g * norm_x_k * z_k:", varrho_g_norm_x_k_z_k)
+            lhs_sum += varrho_g_norm_x_k_z_k
+
+            varrho_g_norm_x_k_x_s_abs_u_s = varrho_g * norm_x_k_x_s * abs(u_s[0])  # abs(u_s) since u_s is scalar
+            print("varrho_g * norm_x_k_x_s * abs(u_s[0]):", varrho_g_norm_x_k_x_s_abs_u_s)
+            lhs_sum += varrho_g_norm_x_k_x_s_abs_u_s
+
+            varrho_f_norm_x_k_x_s = varrho_f * norm_x_k_x_s
+            print("varrho_f * norm_x_k_x_s:", varrho_f_norm_x_k_x_s)
+            lhs_sum += varrho_f_norm_x_k_x_s
+
+            neg_B_d_u_s = -B_d * u_s[0]
+            print("-B_d * u_s[0]:", neg_B_d_u_s)
+            lhs_sum += neg_B_d_u_s
+
+            x_s_next_value = x_s_next[0]
+            print("x_s_next:", x_s_next_value)
+            lhs_sum += x_s_next_value
+
+            neg_a_k = -a_k
+            print("-a_k:", neg_a_k)
+            lhs_sum += neg_a_k
+
+            Delta_a_k_i_minus_1_value = Delta_a_k_i_minus_1
+            print("Delta_a_k_i_minus_1:", Delta_a_k_i_minus_1_value)
+            lhs_sum += Delta_a_k_i_minus_1_value
+
+            k_terms_a_diff = (k1 + k2 + k3) * (a_k - a_k_i_minus_1)
+            print("(k1 + k2 + k3) * (a_k - a_k_i_minus_1):", k_terms_a_diff)
+            lhs_sum += k_terms_a_diff
+
+            complex_k_term = - (k3 * k1 + k3 * k2 + k2 * k1) / (tau**-1) * delta_v_k
+            print("-(k3 * k1 + k3 * k2 + k2 * k1) / (tau^-1) * delta_v_k:", complex_k_term)
+            lhs_sum += complex_k_term
+
+            more_complex_k_term = - k3 * k2 * k1 / (tau**-2) * (delta_p_k - d_min)
+            print("- k3 * k2 * k1 / (tau^-2) * (delta_p_k - d_min):", more_complex_k_term)
+            lhs_sum += more_complex_k_term
+
+            # Print the total sum
+            print("\nTotal sum of all terms:", lhs_sum, lhs_sum-violation.X)
+            print('****************\n')
+
+            # Get the optimal value of u_k
+            optimal_u_k = u_k.X
+            # print(f"Unsafe control {u}, Optimal value of U safe: {optimal_u_k}",violation.X)
+            out = np.clip(optimal_u_k, u_lim[0], u_lim[1])
+        except gp.GurobiError as e:
+            print(f"Gurobi error: {e}")
+            out = u
+        except Exception as e:
+            print(f"General error: {e}")
+            out = u
+
+        return out
+    
+    
+    def resilient_solve_BF_for_u(self,u,u_lim, x_k, x_s_next, x_s, u_s, a_k, delta_v_k, delta_p_k, a_k_gamma_i_minus_1,  Delta_a_k_i_minus_1,gamma):
+        """
+        Solves for u_k given input vectors x_k, x_s and scalar values using Gurobi, handling abs() using auxiliary variables.
+        
+        Parameters are the same as before.
+        
+        Returns:
+        u_k: float
+            The optimized scalar value for u_k
+        """
+        tau = self.h
+        k1, k2, k3 = 10, 10, 10
+        varrho_g, varrho_f = 0.001, 0.001
+        B_d = self.Bd[2,0]
+        d_min = 5
+        M = 1e6  # Big-M constant (sufficiently large)
+        
+        if isinstance(x_s, torch.Tensor):
+            x_s = x_s.numpy()
+        if isinstance(u_s, torch.Tensor):
+            u_s = u_s.numpy()
+        if isinstance(x_s_next, torch.Tensor):
+            x_s_next = x_s_next.numpy()
+        # Create a Gurobi model
+        model = gp.Model("qp")
+        # model.Params.NonConvex = 2
+        model.Params.LogToConsole = 0
+        model.Params.FeasibilityTol = 1e-3
+
+        # Define the decision variable u_k
+        u_k = model.addVar(lb=-GRB.INFINITY, ub=GRB.INFINITY, name="u_k")
+
+        # Auxiliary variable for |u_k - u_s|
+        z_k = model.addVar(lb=0.0, name="z_k")
+
+        # New variable to measure the violation of the constraint
+        violation = model.addVar(lb=0.0, name="violation")
+
+        # Binary variable to switch between the cases
+        b_k = model.addVar(vtype=GRB.BINARY, name="b_k")
+
+        # Define the objective function
+        # Minimize the difference between u and u_k, plus a penalty for constraint violation
+        penalty_weight = 10  # Adjust this weight to control the penalty
+        objective = (u - u_k) * (u - u_k) + penalty_weight * violation
+        model.setObjective(objective, GRB.MINIMIZE)
+        # Precompute norms and other scalar values outside the constraint
+        norm_x_k = np.linalg.norm(x_k)
+        norm_x_k_x_s = np.linalg.norm(x_k - x_s)
+
+        # Big-M constraints to enforce z_k = |u_k - u_s|
+        # Case 1: If b_k = 1, z_k = u_k - u_s
+        model.addConstr(z_k >= (u_k - u_s) , "abs_pos_1")
+        model.addConstr(z_k <= (u_k - u_s) + M * (1 - b_k), "abs_pos_2")
+
+        # Case 2: If b_k = 0, z_k = u_s - u_k
+        model.addConstr(z_k >= (-u_k + u_s), "abs_neg_1")
+        model.addConstr(z_k <= (-u_k + u_s) + M * b_k, "abs_neg_2")
+
+        # Define the constraint equation using Gurobi LinExpr
+        lhs = gp.LinExpr()
+        lhs.add(B_d * u_k)
+        lhs.add(varrho_g * norm_x_k * z_k)  # Involving z_k which is now |u_k - u_s|
+        lhs.add(varrho_g * norm_x_k_x_s * abs(u_s[0]))  # abs(u_s) because it's a scalar
+        lhs.add(varrho_f * norm_x_k_x_s)
+        lhs.add(-B_d * u_s[0])
+        lhs.add(x_s_next[0])
+        lhs.add((k1 + k2 + k3-1)*a_k)
+        lhs.add(Delta_a_k_i_minus_1)
+        lhs.add((k1 + k2 + k3) * (gamma*Delta_a_k_i_minus_1 - a_k_gamma_i_minus_1))
+        lhs.add(- (k3 * k1 + k3 * k2 + k2 * k1) / (tau**-1) * delta_v_k)
+        lhs.add(- k3 * k2 * k1 / (tau**-2) * (delta_p_k - d_min))
+
+        # Add the constraint to the model
+        model.addConstr(lhs - violation <= 0.0, "constraint")
+        
+        # Add a constraint to limit the violation to a certain threshold
+        max_violation = 100  # Set a maximum allowable violation
+        model.addConstr(violation <= max_violation, "violation_limit")
+        
+        # Solve the model
+
+
+        try:
+            # Solve the model
+            model.optimize()
+            # print(u,u_k.X,u_s)
+            # Perform the operations and print each step
+            print('u_k:',u_k.X,'    u:', u,'    u_s',u_s, '     z_k:',z_k.X,'    violation:',violation.X)
+            lhs_sum = 0
+            B_d_u_k = B_d * u_k.X
+            print("B_d * u_k:", B_d_u_k)
+            lhs_sum += B_d_u_k
+
+            varrho_g_norm_x_k_z_k = varrho_g * norm_x_k * z_k.X  # z_k = |u_k - u_s|
+            print("varrho_g * norm_x_k * z_k:", varrho_g_norm_x_k_z_k)
+            lhs_sum += varrho_g_norm_x_k_z_k
+
+            varrho_g_norm_x_k_x_s_abs_u_s = varrho_g * norm_x_k_x_s * abs(u_s[0])  # abs(u_s) since u_s is scalar
+            print("varrho_g * norm_x_k_x_s * abs(u_s[0]):", varrho_g_norm_x_k_x_s_abs_u_s)
+            lhs_sum += varrho_g_norm_x_k_x_s_abs_u_s
+
+            varrho_f_norm_x_k_x_s = varrho_f * norm_x_k_x_s
+            print("varrho_f * norm_x_k_x_s:", varrho_f_norm_x_k_x_s)
+            lhs_sum += varrho_f_norm_x_k_x_s
+
+            neg_B_d_u_s = -B_d * u_s[0]
+            print("-B_d * u_s[0]:", neg_B_d_u_s)
+            lhs_sum += neg_B_d_u_s
+
+            x_s_next_value = x_s_next[0]
+            print("x_s_next:", x_s_next_value)
+            lhs_sum += x_s_next_value
+
+            k_terms_a_k = (k1 + k2 + k3 - 1) * a_k
+            print("(k1 + k2 + k3 - 1) * a_k:", k_terms_a_k)
+            lhs_sum += k_terms_a_k
+
+            Delta_a_k_i_minus_1_value = Delta_a_k_i_minus_1
+            print("Delta_a_k_i_minus_1 (repeated):", Delta_a_k_i_minus_1_value)
+            lhs_sum += Delta_a_k_i_minus_1_value
+
+            gamma_term = (k1 + k2 + k3) * (gamma * Delta_a_k_i_minus_1 - a_k_gamma_i_minus_1)
+            print("(k1 + k2 + k3) * (gamma * Delta_a_k_i_minus_1 - a_k_gamma_i_minus_1):", gamma_term)
+            lhs_sum += gamma_term
+
+            complex_k_term_2 = - (k3 * k1 + k3 * k2 + k2 * k1) / (tau**-1) * delta_v_k
+            print("-(k3 * k1 + k3 * k2 + k2 * k1) / (tau^-1) * delta_v_k (repeated):", complex_k_term_2)
+            lhs_sum += complex_k_term_2
+
+            more_complex_k_term_2 = - k3 * k2 * k1 / (tau**-2) * (delta_p_k - d_min)
+            print("- k3 * k2 * k1 / (tau^-2) * (delta_p_k - d_min) (repeated):", more_complex_k_term_2)
+            lhs_sum += more_complex_k_term_2
+
+            # Print the total sum
+            print("\nTotal sum of all terms:", lhs_sum, lhs_sum-violation.X)
+            print('****************\n')
+
+            # Get the optimal value of u_k
+            optimal_u_k = u_k.X
+            # print(f"Unsafe control {u}, Optimal value of U safe: {optimal_u_k}",violation.X)
+            out = np.clip(optimal_u_k, u_lim[0], u_lim[1])
+        except gp.GurobiError as e:
+            print(f"Gurobi error: {e}")
+            out = u
+        except Exception as e:
+            print(f"General error: {e}")
+            out = u
+
         return out
 
 
@@ -479,185 +704,3 @@ class SimResults():
 
 
 
-
-
-
-
-
-
-
-# class SimResults_():
-#     def __init__(self, labels, max_length=10000, output_dir_path="./Simulation_Results", select={'states': 1}):
-#         self.max_length = max_length
-#         self.number = 5
-#         self.t = np.zeros(max_length)
-#         self.y = np.zeros((self.number,max_length))
-#         self.labels = labels
-#         self.select = select
-#         self.output_dir_path = output_dir_path
-#         self.pallet = ['c','r', 'g', 'b', 'm', '#E67E22', '#1F618D']
-#         self.cnt = 0 
-        
-#         if not os.path.exists(output_dir_path):
-#             os.makedirs(output_dir_path)
-        
-#     def record_state(self, t, y):
-#         self.y[:, self.cnt] = np.copy(y)
-#         self.t[self.cnt ] = t
-#         self.cnt +=1
-    
-#     def graph(self, j):
-#         if self.select['states']:
-#             fig, axes = plt.subplots(self.number_of_subplots, 1, figsize=(10, 6))
-#             fig.tight_layout(pad=3.0)
-
-#             for i, sublist in enumerate(self.labels):
-#                 for ii, label in enumerate(sublist):
-#                     axes[i].plot(self.t[:self.cnt], self.y[i][ii, :self.cnt], color = self.pallet[ii % len(self.pallet)],linestyle=':', label=label)
-#                 axes[i].set_xlabel('t (sec)')
-#                 axes[i].legend(loc='upper right')
-#                 axes[i].grid(True)
-
-#             plt.grid(color='k', linestyle=':', linewidth=1)
-#             plt.savefig(self.output_dir_path +
-#                         '/fig_states_control{}.pdf'.format(j), format='pdf')
-#             # plt.close(fig1)
-#             # plt.show()
-
-
-
-# class SimResults_():
-#     def __init__(self, t, Ctrl, Model, output_dir_path, select={'states': 1}):
-#         self.t = t
-#         len_t = len(t)
-#         self.Model = Model
-#         self.Ctrl = Ctrl
-#         self.x_s_history = np.zeros((self.dim_n, len_t))
-#         self.u_history = np.zeros((self.dim_m, len_t))
-
-#         # the residule of x, attack time
-#         self.residule = np.zeros(len_t)
-#         self.attack_time = -1
-
-#         self.select = select
-#         self.output_dir_path = output_dir_path
-#         self.pallet = ['r', 'g', 'b', 'm', '#E67E22', '#1F618D']
-
-
-#     def record_state(self, i, x, u, x_ref):
-#         temp = np.copy(x)
-#         temp = temp - x_ref
-#         self.x_s_history[:, i] = temp
-#         self.u_history[:, i] = u
-
-#     def graph(self, j, i):
-#         # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>PLOT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-#         # plot the 'control' + 'states' of the system vs. 'time' ################################
-#         if self.select['states']:
-#             fig1 = plt.figure()
-#             for im in range(self.dim_m):
-#                 plt.plot(self.t[:i], self.u_history[im, :i], 'c')
-#             for ii in range(self.dim_n):
-#                 plt.plot(self.t[:i], self.x_s_history[ii, :i],
-#                          self.pallet[ii % len(self.pallet)])
-
-#             plt.legend(
-#                 ["Control", "Position", "Velocity", "Accelration"], loc=1)
-#             plt.xlabel('t (sec)')
-#             plt.ylabel('States and Control')
-#             # plt.tight_layout()
-#             # plt.ylim((-5, 5))
-
-#             plt.grid(color='k', linestyle=':', linewidth=1)
-#             plt.savefig(self.output_dir_path +
-#                         '/fig_states_control{}.pdf'.format(j), format='pdf')
-#             # plt.close(fig1)
-#             # plt.show()
-
-#     # record everything in the movie
-#     def record_system(self, i, x, u, x_ref, residule, attack_time=-1):
-#         if attack_time != -1:
-#             self.attack_time = attack_time
-#         temp = np.copy(x)
-#         temp = temp - x_ref
-#         self.x_s_history[:, i] = temp
-#         self.u_history[:, i] = u
-#         self.residule[i] = residule
-
-#     def graph_system(self, j, i):
-#         # initialize
-#         fig, ax = plt.subplots()
-
-#         # plot the control and the system
-#         # plot state variable and input
-#         for im in range(self.dim_m):
-#             ax.plot(self.t[:i], self.u_history[im, :i], 'c')
-#         for ii in range(self.dim_n):
-#             ax.plot(self.t[:i], self.x_s_history[ii, :i],
-#                     self.pallet[ii % len(self.pallet)])
-
-#         fig.legend(
-#             ["Control", "Position", "Velocity", "Accelration"], loc=1)
-#         plt.xlabel('t (sec)')
-#         plt.ylabel('States and Control')
-
-#         if self.attack_time > 0:
-#             plt.axvline(x=self.attack_time, color='r', linewidth=0.15)
-#             plt.text(self.attack_time, 0, s="attack launched", color='r')
-
-#         plt.grid(color='k', linestyle=':', linewidth=1)
-#         plt.savefig(self.output_dir_path +
-#                     '/fig_system{}.pdf'.format(j), format='pdf')
-
-#     def graph_system(self, j, i):
-#         # initialize
-#         fig, ax = plt.subplots()
-
-#         # plot the control and the system
-#         # plot state variable and input
-#         for im in range(self.dim_m):
-#             ax.plot(self.t[:i], self.u_history[im, :i], 'c')
-#         for ii in range(self.dim_n):
-#             ax.plot(self.t[:i], self.x_s_history[ii, :i],
-#                     self.pallet[ii % len(self.pallet)])
-
-#         fig.legend(
-#             ["Control", "Position", "Velocity", "Accelration"], loc=1)
-#         plt.xlabel('t (sec)')
-#         plt.ylabel('States and Control')
-
-#         if self.attack_time > 0:
-#             plt.axvline(x=self.attack_time, color='r', linewidth=0.15)
-#             plt.text(self.attack_time, -0.05, "attack launched",
-#                      transform=ax.get_xaxis_transform(),
-#                      ha='center', va='top', color='r')
-
-#         plt.grid(color='k', linestyle=':', linewidth=1)
-#         plt.savefig(self.output_dir_path +
-#                     '/fig_system{}.pdf'.format(j), format='pdf')
-
-#     def graph_residule(self, j, i):
-#         # initialize
-#         fig, ax = plt.subplots()
-
-#         # plot the control and the system
-#         # plot state variable and input
-#         ax.plot(self.t, self.residule, 'c')
-
-#         fig.legend(["residule"], loc=1)
-#         plt.xlabel('t (sec)')
-#         plt.ylabel('residule value')
-
-#         if self.attack_time > 0:
-#             plt.axvline(x=self.attack_time, color='r', linewidth=0.15)
-#             # plt.text(self.attack_time, 0, s="attack launched", color='r')
-#             plt.text(self.attack_time, -0.05, "attack launched",
-#                      transform=ax.get_xaxis_transform(),
-#                      ha='center', va='top', color='r')
-#         plt.grid(color='k', linestyle=':', linewidth=1)
-#         plt.savefig(self.output_dir_path +
-#                     '/fig_residule{}.pdf'.format(j), format='pdf')
-
-#     def printout(self, j):
-#         # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>PRINT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-#         pass

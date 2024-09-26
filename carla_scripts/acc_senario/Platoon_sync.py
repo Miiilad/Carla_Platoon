@@ -68,35 +68,7 @@ configs["window_length"] = 10
 attacker = FDI_attacker(configs=configs)
 attack_time = np.inf # the time to start the attack
 
-# Initialize and train the network
-dim_n = 4
-net = MyNeuralNetwork(n=dim_n,path="./data/dodge/")
 
-
-if setting["load_model"]:
-    try: 
-        net.load_model()
-        loaded_NN_model =True
-    except:
-        print('Model not found')
-        loaded_NN_model =False
-
-# net.train_network()
-if setting["train_model"]:
-    try: 
-        net.train_network()
-        if setting["save_model"]: net.save_model()
-        loaded_NN_model =True
-    except: 
-        print('Data not found')
-if setting["load_data"]:
-    try: 
-        x_data,u_data, output_data = net.load_and_slice_training_data()
-    except: 
-        print('Data not found')
-
-
-if not setting["run_simulation"]: sys.exit("Done")
 # physics 
 settings.substepping = True
 settings.max_substep_delta_time = 0.05
@@ -171,15 +143,51 @@ prev_run_time = 0
 
 
 # Spawn the lead vehicle
-lead_car = mCar(client, spawn_point=spawn_point, name='leader')
+list_of_vehicles = ['vehicle.bmw.grandtourer','vehicle.dodge.charger_2020'] #'vehicle.tesla.cybertruck','vehicle.toyota.prius','vehicle.carlamotors.carlacola','vehicle.dodge.charger_2020','vehicle.tesla.model3'
+len_of_platoon=len(list_of_vehicles)-1
+lead_car = mCar(client, type= list_of_vehicles[0],spawn_point=spawn_point, name='leader')
 world.tick() 
+
+
+
+# Initialize and train the network
+dim_n = 4
+net = [MyNeuralNetwork(n=dim_n,path=f"./data/{list_of_vehicles[i+1][8:]}/") for i in range(len_of_platoon)]
+
+for i in range(len_of_platoon):
+    if setting["load_model"]:
+        try: 
+            net[i].load_model()
+            loaded_NN_model =True
+        except:
+            print('Model not found')
+            loaded_NN_model =False
+
+    # net.train_network()
+    if setting["train_model"]:
+        try: 
+            net[i].train_network()
+            if setting["save_model"]: net[i].save_model()
+            loaded_NN_model =True
+        except: 
+            print('Data not found')
+    if setting["load_data"]:
+        try: 
+            x_data,u_data, output_data = net[i].load_and_slice_training_data()
+        except: 
+            print('Data not found')
+
+
+if not setting["run_simulation"]: sys.exit("Done")
+
+
 
 # time.sleep(2)
 ########### spawn the lead vehicle 20 meters ahead of the ego vehicle
 reference_vehicle_transform = lead_car.vehicle.get_transform()
 
+
 # spawn the ego car
-len_of_platoon=1
 ego_car=[]
 route_ego=[]
 previous_loc_rot = []
@@ -193,7 +201,7 @@ for i in range(len_of_platoon):
     # Create a new transform for the spawned vehicle
     new_transform = carla.Transform(new_position, new_rotation)
     previous_loc_rot.append(new_transform)
-    ego_car.append(mCar(client, spawn_point=new_transform,name='ego{}'.format(i)))
+    ego_car.append(mCar(client, type= list_of_vehicles[i+1], spawn_point=new_transform,name='ego{}'.format(i)))
     ego_car[-1].get_focus() # make spectator follow the ego car
     world.tick() 
     # get the planed route for ego
@@ -237,7 +245,7 @@ for i in range(len_of_platoon):
 lead_car.set_global_plan(route_leader)
 
 # set the speed of the lead car 
-lead_car.set_speed(80)
+lead_car.set_speed(70)
 
 # imu filter and imu data
 use_filter = "kalman"
@@ -289,9 +297,9 @@ def loop_5ms_loop(previous_loc_rot,loop_name="5ms loop", run_time=None):
     # data_to_send["custom data"]["acceleration"]["y"] = ego_car[0]._acceleration.y
     # data_to_send["custom data"]["acceleration"]["z"] = ego_car[0]._acceleration.z
 
-    data_to_send["custom data"]["velocity"]["x"] = ego_car[0]._velocity.x
-    data_to_send["custom data"]["velocity"]["y"] = ego_car[0]._velocity.y
-    data_to_send["custom data"]["velocity"]["z"] = ego_car[0]._velocity.z
+    # data_to_send["custom data"]["velocity"]["x"] = ego_car[0]._velocity.x
+    # data_to_send["custom data"]["velocity"]["y"] = ego_car[0]._velocity.y
+    # data_to_send["custom data"]["velocity"]["z"] = ego_car[0]._velocity.z
 
     # data_to_send["custom data"]["velocity"]["x"] = lead_car._velocity.x
     # data_to_send["custom data"]["velocity"]["y"] = lead_car._velocity.y
@@ -337,6 +345,7 @@ def loop_5ms_loop(previous_loc_rot,loop_name="5ms loop", run_time=None):
         yaw_rate = ego_car[i].imu_data.gyroscope.z
         
         # print(yaw_rate)
+        # print(ego_car[i]._location,ego_car[i].get_speed(),imu_data[i][0])
         x_k_list.append(np.array([ ego_car[i].get_speed(),imu_data[i][0],slope,yaw_rate])) 
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
         data_to_send["custom2"]["acceleration without filtered"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x#ego_car[i]._acceleration.x
@@ -389,7 +398,7 @@ def inner_control_loop(x_k_list,loop_name="10ms loop", target_distance=10):
 
     return done
 
-def outer_control_loop(x_measure_list,loop_name="10ms loop", target_distance=10, run_time=None):
+def outer_control_loop(x_measure_list,acceleration_list,loop_name="10ms loop", target_distance=10, run_time=None):
 
 
     # world.tick()
@@ -425,7 +434,7 @@ def outer_control_loop(x_measure_list,loop_name="10ms loop", target_distance=10,
         x_list_acc.append(x)
         #Calculate control
         input_acceleration[i]= Controller_mpc[i].calculate(x, acceleration_front_vehicle,u_pre_list[i], u_lim)#+3*np.sin(5*run_time+(i+1)*2)
-        input_acceleration[i] += 0.3*np.sin(run_time+random_for_input)
+        input_acceleration[i] += 0.1*np.sin(run_time+random_for_input)
         input_acceleration[i] =  np.clip(input_acceleration[i], u_lim[0], u_lim[1])
 
         # record u for next step: it willl be needed for control value calculation
@@ -437,12 +446,17 @@ def outer_control_loop(x_measure_list,loop_name="10ms loop", target_distance=10,
         
 
         #Calculate the safe control through optimization
-        if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net,x_measure_list[i][:3],input_acceleration[i],acceleration_front_vehicle,u_lim)
+        if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net[i],x_measure_list[i][:3],input_acceleration[i],acceleration_front_vehicle,u_lim)
         
         
         closest_idx = Controller_mpc[i].find_closest_sample(x_data,x_measure_list[i])
-        u_BF = Controller_mpc[i].solve_BF_for_u(input_acceleration[i],u_lim, x_measure_list[i],x_data[closest_idx],u_data[closest_idx],acceleration_list[i],velocity_error,distance_error,acceleration_front_vehicle,3)
-        print(u_BF)
+        u_BF = Controller_mpc[i].resilient_solve_BF_for_u(input_acceleration[i],u_lim, x_measure_list[i],
+                                                          output_data[closest_idx], x_data[closest_idx],u_data[closest_idx],
+                                                          acceleration_list[i],velocity_error,distance_error,acceleration_front_vehicle,1,3)
+        # if abs(u_BF - input_acceleration[i])>0.01: print('safe u',u_BF,input_acceleration[i])
+        # if u_BF >= -1 and u_BF <= 1 : input_acceleration[i] = u_BF
+        input_acceleration[i] = u_BF
+
         
         # print(">>>>",i, input_acceleration[i])
         location_front_vehicle = ego_car[i].vehicle.get_transform().location
@@ -494,15 +508,16 @@ Controller_mpc = [Control(h, prediction_H, control_H, Objective) for i in range(
 
 
 
-sim_results = SimResults(["Velocity","Acceleration","Slope","Yaw Rate","Input-ThBr",["True acceleration","Predicted","Nominal"]],
-                         [[-2,30],[-5,5],[-30,30],[-1,1],[-1.1,1.1],[[-5,5],[-5,5],[-5,5]]],
-                         ['-','-','-','-','-',['-','--','--']],
-                         max_length = int(sim_duration/h))
+sim_results = [SimResults(["Velocity","Acceleration","Slope","Yaw Rate","Input-ThBr",["True acceleration","Predicted"]],
+                         [[-2,30],[-5,5],[-30,30],[-1,1],[-1.1,1.1],[[-5,5],[-5,5]]],
+                         ['-','-','-','-','-',['-','--']],
+                         max_length = int(sim_duration/h),output_dir_path=f"./data/{list_of_vehicles[i+1][8:]}/") for i in range(len_of_platoon)]
 acceleration_list=[0]*len_of_platoon
 acceleration_lead=0
 input_acceleration=[0]*len_of_platoon
-data_collected_input = []
-data_collected_output = []
+data_collected_input = [ [] for i in range(len_of_platoon)]
+data_collected_output = [ [] for i in range(len_of_platoon)]
+gear = [0]*len_of_platoon
 x_measure_list_previous = []
 u_pre_list=np.zeros(len_of_platoon)
 
@@ -538,29 +553,29 @@ while True:
 
     if run_time - record_outer >= 0.1:
         # loop for speed control
-        done,input_acceleration, x_measure_list, x_prediction_nom_list = outer_control_loop(x_k_list,target_distance=target_dist, run_time=run_time)
+        done,input_acceleration, x_measure_list, x_prediction_nom_list = outer_control_loop(x_k_list,acceleration_list,target_distance=target_dist, run_time=run_time)
 
         if len(x_measure_list_previous) > 0:
             for i in range(len_of_platoon):
                 safe_distance_for_data=7
-                
-                if gear == 3:
+                gear[i] = ego_car[i]._gear
+                if gear[i] == 3:
                     #This learns increaments on acceleration i.e dx. 
                     input = np.append(x_measure_list_previous[i],u_implemented[i])
                     output = [x_measure_list[i][1]-x_prediction_nom_list[i][2]]
 
 
     
-                    data_collected_input.append(input)
-                    data_collected_output.append(output)
+                    data_collected_input[i].append(input)
+                    data_collected_output[i].append(output)
                 
                 
 
-                if (gear == 3) and loaded_NN_model:
+                if (gear[i] == 3) and loaded_NN_model:
                     x_ = torch.tensor(input[:dim_n], dtype=torch.float32)
 
                     u_ = torch.tensor(input[dim_n:dim_n+1], dtype=torch.float32)
-                    out_NN = net.evaluate(x_,u_).flatten().tolist()
+                    out_NN = net[i].evaluate(x_,u_).flatten().tolist()
                     ground_truth = [x_measure_list[i][1]]
                     nominal = [x_prediction_nom_list[i][2]]
                     prediction = [out_NN[0]+x_prediction_nom_list[i][2]]
@@ -571,7 +586,7 @@ while True:
                     prediction = [0]
 
 
-                sim_results.record_state(run_time,x_k_list[i].tolist()+[input_acceleration[i]] + ground_truth + prediction + nominal)
+                sim_results[i].record_state(run_time,x_k_list[i].tolist()+[input_acceleration[i]] + ground_truth + prediction )
 
 
                 # if ego_car[i]._gear==3: 
@@ -582,10 +597,9 @@ while True:
                     
                 
         
-        gear = ego_car[i]._gear
+        
         x_measure_list_previous = x_measure_list.copy()
         u_implemented = input_acceleration.copy()
-
 
         record_outer = run_time
 
@@ -622,22 +636,23 @@ while True:
 
 
     if run_time > sim_duration or done:
-        # Save data (optional)
-        data_collected_input = np.array(data_collected_input)
-        data_collected_output = np.array(data_collected_output).reshape(len(data_collected_output),1)
+        for i in range(len_of_platoon):
+            # Save data (optional)
+            data_collected_input_ = np.array(data_collected_input[i])
+            data_collected_output_ = np.array(data_collected_output[i]).reshape(len(data_collected_output[i]),1)
 
-        
-        x=torch.tensor(data_collected_input[:,:dim_n], dtype=torch.float32)
-        u=torch.tensor(data_collected_input[:,dim_n:dim_n+1], dtype=torch.float32)
-        y= torch.tensor(data_collected_output, dtype=torch.float32)
-        input = torch.cat((x, u), dim=1) 
-        
-        
-        
-        if setting["save_data"]:net.save_data(input,y)
-        # torch.save(input_data, 'input_data.pt'.format())
-        # torch.save(output_data, 'output_data.pt'.format())
-        # end the thread
+            
+            x=torch.tensor(data_collected_input_[:,:dim_n], dtype=torch.float32)
+            u=torch.tensor(data_collected_input_[:,dim_n:dim_n+1], dtype=torch.float32)
+            y= torch.tensor(data_collected_output_, dtype=torch.float32)
+            input = torch.cat((x, u), dim=1) 
+            
+            
+            
+            if setting["save_data"]:net[i].save_data(input,y)
+            # torch.save(input_data, 'input_data.pt'.format())
+            # torch.save(output_data, 'output_data.pt'.format())
+            # end the thread
         break
 
 for i in range(len_of_platoon):
@@ -646,7 +661,7 @@ lead_car.destroy()
 
 
 # save graphs
-sim_results.graph_(0)
+for i in range(len_of_platoon):sim_results[i].graph_(0)
 # save the data
 df.to_csv('/home/docker/carla_scripts/datas.csv')
 

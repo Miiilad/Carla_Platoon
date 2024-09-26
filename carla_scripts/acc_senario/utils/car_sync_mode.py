@@ -10,11 +10,11 @@ from agents.navigation.local_planner import LocalPlanner
 import random
 
 class mCar:
-    def __init__(self, client, spawn_point=None, name = "ego_car"):
+    def __init__(self, client, type='vehicle.bmw.grandtourer', spawn_point=None, name = "ego_car"):
         # spawn ego car
         world = client.get_world()
         # ego_bp = world.get_blueprint_library().find('vehicle.carlamotors.european_hgv')
-        ego_bp = world.get_blueprint_library().find('vehicle.bmw.grandtourer')
+        ego_bp = world.get_blueprint_library().find(type)
         # ego_bp = world.get_blueprint_library().find('vehicle.dodge.charger_2020')
         # car_select=random.choice(['vehicle.carlamotors.european_hgv','vehicle.tesla.model3','vehicle.dodge.charger_2020'])
         # print(car_select)
@@ -137,7 +137,7 @@ class mCar:
         if self._gear == 3 : 
             control.manual_gear_shift = True  # Enable manual gear shifting
             control.gear = 3  # For example, lock the vehicle in 3rd gear
-            # print('hiiiiii')
+           
 
         if throttle >=0:
             control.throttle = throttle
