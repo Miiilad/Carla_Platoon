@@ -14,65 +14,101 @@ except:
 # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
 
 class MyNeuralNetwork(nn.Module):
-    def __init__(self,path="./data/",n=3, nh1=100, nh2=50, output_dim=1):
-        # Assuming n is the dimension of x and y, and nh is the number of neurons in each hidden layer
-        # n = 3  # example value for n
-        # nh = 10  # example value for nh
+    def __init__(self, path="./data/", n=3, nh1=100, nh2=50, output_dim=1, num_layers=1):
+        """
+        Args:
+            n (int): Input dimension for LSTM (features per time step).
+            nh1 (int): Hidden size for the LSTM layers.
+            nh2 (int): Size of the linear layer after LSTM output.
+            output_dim (int): Output dimension of the network.
+            num_layers (int): Number of LSTM layers.
+        """
         super(MyNeuralNetwork, self).__init__()
-        # Define the neural network for f(x)
-        self.f_network = nn.Sequential(
-            nn.Linear(n, nh1),
-            nn.ReLU(),
-            nn.Linear(nh1, nh2),
-            nn.ReLU(),
-            nn.Linear(nh2, output_dim)
-        )
-        
-        # Define the neural network for g(x)
-        self.g_network = nn.Sequential(
-            nn.Linear(n, nh1),
-            nn.ReLU(),
+
+        # LSTM for f(x)
+        self.f_lstm = nn.LSTM(input_size=n, hidden_size=nh1, num_layers=num_layers, batch_first=True)
+        self.f_fc = nn.Sequential(
             nn.Linear(nh1, nh2),
             nn.ReLU(),
             nn.Linear(nh2, output_dim)
         )
 
-        # Initialize optimizer and loss function here, if they are fixed
+        # LSTM for g(x)
+        self.g_lstm = nn.LSTM(input_size=n, hidden_size=nh1, num_layers=num_layers, batch_first=True)
+        self.g_fc = nn.Sequential(
+            nn.Linear(nh1, nh2),
+            nn.ReLU(),
+            nn.Linear(nh2, output_dim)
+        )
+
+        # Loss function and optimizer
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.parameters())
 
-        #Data saver class instances
-        #Data saver class 
-        self.filename="input-output"
-        self.path=path
-        self.DataSaver_io= DataSaver(self.path,self.filename)
-        
-
+        # Data saver class instances (assuming you have a DataSaver class)
+        self.filename = "input-output"
+        self.path = path
+        self.DataSaver_io = DataSaver(self.path, self.filename)
 
     def f_tilde(self, x):
-        """Evaluate f(x)."""
-        return self.f_network(x)
-    
+        """Evaluate f(x) using LSTM."""
+        batch_size = x.size(0)  # Get the batch size from input
+
+        # Ensure input is 3D: (batch_size, sequence_length, input_size)
+        if len(x.size()) == 2:
+            x = x.unsqueeze(1)  # Add a sequence length of 1 if missing
+
+        # Initialize hidden and cell states (for LSTM)
+        h_0 = torch.zeros(1, batch_size, self.f_lstm.hidden_size).to(x.device)  # (num_layers, batch_size, hidden_size)
+        c_0 = torch.zeros(1, batch_size, self.f_lstm.hidden_size).to(x.device)
+
+        # Pass through LSTM
+        lstm_out, _ = self.f_lstm(x, (h_0, c_0))
+
+        # Use only the last time step's output
+        last_output = lstm_out[:, -1, :]  # (batch_size, hidden_size)
+
+        # Pass through fully connected layers
+        return self.f_fc(last_output)
+
     def g_tilde(self, x):
-        """Evaluate g(x)."""
-        return self.g_network(x)
-    
+        """Evaluate g(x) using LSTM."""
+        batch_size = x.size(0)  # Get the batch size from input
+
+        # Ensure input is 3D: (batch_size, sequence_length, input_size)
+        if len(x.size()) == 2:
+            x = x.unsqueeze(1)  # Add a sequence length of 1 if missing
+
+        # Initialize hidden and cell states (for LSTM)
+        h_0 = torch.zeros(1, batch_size, self.g_lstm.hidden_size).to(x.device)  # (num_layers, batch_size, hidden_size)
+        c_0 = torch.zeros(1, batch_size, self.g_lstm.hidden_size).to(x.device)
+
+        # Pass through LSTM
+        lstm_out, _ = self.g_lstm(x, (h_0, c_0))
+
+        # Use only the last time step's output
+        last_output = lstm_out[:, -1, :]  # (batch_size, hidden_size)
+
+        # Pass through fully connected layers
+        return self.g_fc(last_output)
+
     def forward(self, x, u):
         """
         Evaluate x_next = f(x) + g(x) * u.
         
         Args:
-            x (torch.Tensor): Input state tensor of shape (batch_size, 3).
-            u (torch.Tensor): Input control tensor of shape (batch_size, 1).
+            x (torch.Tensor): Input state tensor of shape (batch_size, sequence_length, 3).
+            u (torch.Tensor): Input control tensor of shape (batch_size, sequence_length, 1).
         
         Returns:
             torch.Tensor: The next state tensor of shape (batch_size, 3).
         """
         f_x = self.f_tilde(x)  # Compute f(x)
         g_x = self.g_tilde(x)  # Compute g(x)
-        x_next = f_x + g_x * u  # Compute x_next
+        
+        # Apply control to g(x) and compute x_next
+        x_next = f_x + g_x * u
         return x_next
-
     
     def load_and_slice_training_data(self):
         x_data_list = []
@@ -218,29 +254,46 @@ class MyNeuralNetwork(nn.Module):
             print(f'Model MSE on Test Data: {mse.item()}')
     
 
-    def evaluate(self,x,u):
-    # Ensure x and u are in float32 for consistency
-        # x = x.astype(np.float32)
-        # u = u.astype(np.float32)
+    def evaluate(self, x, u):
+        """
+        Evaluate the model's output for given input x and control u.
 
-        # Convert x and u to torch tensors
-        # x = torch.tensor(x,dtype=torch.float32)
-        # u = torch.tensor(u,dtype=torch.float32)
+        Args:
+            x (numpy.ndarray or torch.Tensor): Input state of shape (input_dim,) or (batch_size, input_dim).
+            u (numpy.ndarray or torch.Tensor): Input control of shape (control_dim,) or (batch_size, control_dim).
 
-        # # Ensure norm_mean_x and norm_std_x are tensors (convert if needed)
-        # norm_mean_x = torch.tensor(self.norm_mean_x)
-        # norm_std_x = torch.tensor(self.norm_std_x)
-        # norm_mean_u = torch.tensor(self.norm_mean_u)
-        # norm_std_u = torch.tensor(self.norm_std_u)
-        
+        Returns:
+            numpy.ndarray: The model's output as a numpy array.
+        """
+        # Ensure x and u are in float32 for consistency
+        x = torch.tensor(x, dtype=torch.float32) if not torch.is_tensor(x) else x
+        u = torch.tensor(u, dtype=torch.float32) if not torch.is_tensor(u) else u
+
+        # Ensure norm_mean_x and norm_std_x are tensors (convert if needed)
+        norm_mean_x = torch.tensor(self.norm_mean_x, dtype=torch.float32)
+        norm_std_x = torch.tensor(self.norm_std_x, dtype=torch.float32)
+        norm_mean_u = torch.tensor(self.norm_mean_u, dtype=torch.float32)
+        norm_std_u = torch.tensor(self.norm_std_u, dtype=torch.float32)
+
         # Normalize x and u
-        normalized_x = (x - self.norm_mean_x) / self.norm_std_x
-        normalized_u = (u - self.norm_mean_u) / self.norm_std_u
+        normalized_x = (x - norm_mean_x) / norm_std_x
+        normalized_u = (u - norm_mean_u) / norm_std_u
+
+        # Handle 1D input (single sample) by adding batch and sequence dimensions
+        if len(normalized_x.shape) == 1:
+            normalized_x = normalized_x.unsqueeze(0).unsqueeze(1)  # (1, 1, input_dim)
+        elif len(normalized_x.shape) == 2:
+            normalized_x = normalized_x.unsqueeze(1)  # (batch_size, 1, input_dim)
+
+        if len(normalized_u.shape) == 1:
+            normalized_u = normalized_u.unsqueeze(0).unsqueeze(1)  # (1, 1, control_dim)
+        elif len(normalized_u.shape) == 2:
+            normalized_u = normalized_u.unsqueeze(1)  # (batch_size, 1, control_dim)
 
         # Pass normalized x and u into the model
-        out = self.forward(normalized_x, normalized_u.unsqueeze(0))
-        
+        out = self.forward(normalized_x, normalized_u)
 
+        # Return the output as a numpy array
         return out.detach().numpy().T
 
     def compute_u_h(self, x_k, u_e_k, A_d, B_d, tau, tau_0, epsilon=1e-3):
