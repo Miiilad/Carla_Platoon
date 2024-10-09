@@ -474,7 +474,7 @@ class Control():
 
         # Define the objective function
         # Minimize the difference between u and u_k, plus a penalty for constraint violation
-        penalty_weight = 10  # Adjust this weight to control the penalty
+        penalty_weight = 0  # Adjust this weight to control the penalty
         objective = (u - u_k) * (u - u_k) + penalty_weight * violation
         model.setObjective(objective, GRB.MINIMIZE)
         # Precompute norms and other scalar values outside the constraint
@@ -501,14 +501,14 @@ class Control():
         lhs.add((k1 + k2 + k3-1)*a_k)
         lhs.add(Delta_a_k_i_minus_1)
         lhs.add((k1 + k2 + k3) * (gamma*Delta_a_k_i_minus_1 - a_k_gamma_i_minus_1))
-        lhs.add(- (k3 * k1 + k3 * k2 + k2 * k1) / (tau**-1) * delta_v_k)
-        lhs.add(- k3 * k2 * k1 / (tau**-2) * (delta_p_k - d_min))
+        lhs.add(- (k3 * k1 + k3 * k2 + k2 * k1) * (tau**-1) * delta_v_k)
+        lhs.add(- k3 * k2 * k1 * (tau**-2) * (delta_p_k - d_min))
 
         # Add the constraint to the model
         model.addConstr(lhs - violation <= 0.0, "constraint")
         
         # Add a constraint to limit the violation to a certain threshold
-        max_violation = 100  # Set a maximum allowable violation
+        max_violation = 0.1  # Set a maximum allowable violation
         model.addConstr(violation <= max_violation, "violation_limit")
         
         # Solve the model
@@ -519,65 +519,199 @@ class Control():
             model.optimize()
             # print(u,u_k.X,u_s)
             # Perform the operations and print each step
-            print('u_k:',u_k.X,'    u:', u,'    u_s',u_s, '     z_k:',z_k.X,'    violation:',violation.X)
-            lhs_sum = 0
-            B_d_u_k = B_d * u_k.X
-            print("B_d * u_k:", B_d_u_k)
-            lhs_sum += B_d_u_k
+            # print('u_k:',u_k.X,'    u:', u,'    u_s',u_s, '     z_k:',z_k.X,'    violation:',violation.X)
+            # lhs_sum = 0
+            # B_d_u_k = B_d * u_k.X
+            # print("B_d * u_k:", B_d_u_k)
+            # lhs_sum += B_d_u_k
 
-            varrho_g_norm_x_k_z_k = varrho_g * norm_x_k * z_k.X  # z_k = |u_k - u_s|
-            print("varrho_g * norm_x_k * z_k:", varrho_g_norm_x_k_z_k)
-            lhs_sum += varrho_g_norm_x_k_z_k
+            # varrho_g_norm_x_k_z_k = varrho_g * norm_x_k * z_k.X  # z_k = |u_k - u_s|
+            # print("varrho_g * norm_x_k * z_k:", varrho_g_norm_x_k_z_k)
+            # lhs_sum += varrho_g_norm_x_k_z_k
 
-            varrho_g_norm_x_k_x_s_abs_u_s = varrho_g * norm_x_k_x_s * abs(u_s[0])  # abs(u_s) since u_s is scalar
-            print("varrho_g * norm_x_k_x_s * abs(u_s[0]):", varrho_g_norm_x_k_x_s_abs_u_s)
-            lhs_sum += varrho_g_norm_x_k_x_s_abs_u_s
+            # varrho_g_norm_x_k_x_s_abs_u_s = varrho_g * norm_x_k_x_s * abs(u_s[0])  # abs(u_s) since u_s is scalar
+            # print("varrho_g * norm_x_k_x_s * abs(u_s[0]):", varrho_g_norm_x_k_x_s_abs_u_s)
+            # lhs_sum += varrho_g_norm_x_k_x_s_abs_u_s
 
-            varrho_f_norm_x_k_x_s = varrho_f * norm_x_k_x_s
-            print("varrho_f * norm_x_k_x_s:", varrho_f_norm_x_k_x_s)
-            lhs_sum += varrho_f_norm_x_k_x_s
+            # varrho_f_norm_x_k_x_s = varrho_f * norm_x_k_x_s
+            # print("varrho_f * norm_x_k_x_s:", varrho_f_norm_x_k_x_s)
+            # lhs_sum += varrho_f_norm_x_k_x_s
 
-            neg_B_d_u_s = -B_d * u_s[0]
-            print("-B_d * u_s[0]:", neg_B_d_u_s)
-            lhs_sum += neg_B_d_u_s
+            # neg_B_d_u_s = -B_d * u_s[0]
+            # print("-B_d * u_s[0]:", neg_B_d_u_s)
+            # lhs_sum += neg_B_d_u_s
 
-            x_s_next_value = x_s_next[0]
-            print("x_s_next:", x_s_next_value)
-            lhs_sum += x_s_next_value
+            # x_s_next_value = x_s_next[0]
+            # print("x_s_next:", x_s_next_value)
+            # lhs_sum += x_s_next_value
 
-            k_terms_a_k = (k1 + k2 + k3 - 1) * a_k
-            print("(k1 + k2 + k3 - 1) * a_k:", k_terms_a_k)
-            lhs_sum += k_terms_a_k
+            # k_terms_a_k = (k1 + k2 + k3 - 1) * a_k
+            # print("(k1 + k2 + k3 - 1) * a_k:", k_terms_a_k)
+            # lhs_sum += k_terms_a_k
 
-            Delta_a_k_i_minus_1_value = Delta_a_k_i_minus_1
-            print("Delta_a_k_i_minus_1 (repeated):", Delta_a_k_i_minus_1_value)
-            lhs_sum += Delta_a_k_i_minus_1_value
+            # Delta_a_k_i_minus_1_value = Delta_a_k_i_minus_1
+            # print("Delta_a_k_i_minus_1 (repeated):", Delta_a_k_i_minus_1_value)
+            # lhs_sum += Delta_a_k_i_minus_1_value
 
-            gamma_term = (k1 + k2 + k3) * (gamma * Delta_a_k_i_minus_1 - a_k_gamma_i_minus_1)
-            print("(k1 + k2 + k3) * (gamma * Delta_a_k_i_minus_1 - a_k_gamma_i_minus_1):", gamma_term)
-            lhs_sum += gamma_term
+            # gamma_term = (k1 + k2 + k3) * (gamma * Delta_a_k_i_minus_1 - a_k_gamma_i_minus_1)
+            # print("(k1 + k2 + k3) * (gamma * Delta_a_k_i_minus_1 - a_k_gamma_i_minus_1):", gamma_term)
+            # lhs_sum += gamma_term
 
-            complex_k_term_2 = - (k3 * k1 + k3 * k2 + k2 * k1) / (tau**-1) * delta_v_k
-            print("-(k3 * k1 + k3 * k2 + k2 * k1) / (tau^-1) * delta_v_k (repeated):", complex_k_term_2)
-            lhs_sum += complex_k_term_2
+            # complex_k_term_2 = - (k3 * k1 + k3 * k2 + k2 * k1) / (tau**-1) * delta_v_k
+            # print("-(k3 * k1 + k3 * k2 + k2 * k1) / (tau^-1) * delta_v_k (repeated):", complex_k_term_2)
+            # lhs_sum += complex_k_term_2
 
-            more_complex_k_term_2 = - k3 * k2 * k1 / (tau**-2) * (delta_p_k - d_min)
-            print("- k3 * k2 * k1 / (tau^-2) * (delta_p_k - d_min) (repeated):", more_complex_k_term_2)
-            lhs_sum += more_complex_k_term_2
+            # more_complex_k_term_2 = - k3 * k2 * k1 / (tau**-2) * (delta_p_k - d_min)
+            # print("- k3 * k2 * k1 / (tau^-2) * (delta_p_k - d_min) (repeated):", more_complex_k_term_2)
+            # lhs_sum += more_complex_k_term_2
 
             # Print the total sum
-            print("\nTotal sum of all terms:", lhs_sum, lhs_sum-violation.X)
-            print('****************\n')
+            # print("\nTotal sum of all terms:", u_k.X, u, violation.X)
+            # print('****************\n')
 
             # Get the optimal value of u_k
             optimal_u_k = u_k.X
             # print(f"Unsafe control {u}, Optimal value of U safe: {optimal_u_k}",violation.X)
             out = np.clip(optimal_u_k, u_lim[0], u_lim[1])
+            # Print the total sum
+            print("\n output:", out, u)
+            print('****************\n')
+       
         except gp.GurobiError as e:
             print(f"Gurobi error: {e}")
             out = u
         except Exception as e:
             print(f"General error: {e}")
+            out = u
+
+        return out
+    
+    def resilient_solve_BF_for_u1(self,u,u_lim, x_k, x_s_next, x_s, u_s, a_k, delta_v_k, delta_p_k, a_k_gamma_i_minus_1,  Delta_a_k_i_minus_1,gamma):
+        """
+        Solves for u_k given input vectors x_k, x_s and scalar values using Gurobi, handling abs() using auxiliary variables.
+        
+        Parameters are the same as before.
+        
+        Returns:
+        u_k: float
+            The optimized scalar value for u_k
+        """
+        tau = self.h
+        k1, k2, k3 = 0.1, 0.4, 0.4  #0.5 0.1 0.1       0.8, 0.4, 0.1
+        varrho_g, varrho_f = 0.001, 0.001
+        B_d = self.Bd[2,0]
+        d_min = 5
+        
+        if isinstance(x_s, torch.Tensor):
+            x_s = x_s.numpy()
+        if isinstance(u_s, torch.Tensor):
+            u_s = u_s.numpy()
+        if isinstance(x_s_next, torch.Tensor):
+            x_s_next = x_s_next.numpy()
+        # Create a Gurobi model
+        model = gp.Model("qp")
+        # model.Params.NonConvex = 2
+        model.Params.LogToConsole = 0
+        model.Params.FeasibilityTol = 1e-3
+
+        # Define the decision variable u_k
+        u_k = model.addVar(lb=-GRB.INFINITY, ub=GRB.INFINITY, name="u_k")
+
+        # # Auxiliary variable for |u_k - u_s|
+        # z_k = model.addVar(lb=0.0, name="z_k")
+
+        # New variable to measure the violation of the constraint
+        violation = model.addVar(lb=0.0, name="violation")
+
+        # Binary variable to switch between the cases
+        b_k = model.addVar(vtype=GRB.BINARY, name="b_k")
+
+        # Define the objective function
+        # Minimize the difference between u and u_k, plus a penalty for constraint violation
+        penalty_weight = 0  # Adjust this weight to control the penalty
+        objective = (u - u_k) * (u - u_k) + penalty_weight * violation
+        model.setObjective(objective, GRB.MINIMIZE)
+        # Precompute norms and other scalar values outside the constraint
+        norm_x_k = np.linalg.norm(x_k)
+        norm_x_k_x_s = np.linalg.norm(x_k - x_s)
+
+        # Define the constraint equation using Gurobi LinExpr
+        lhs = gp.LinExpr()
+        lhs.add(u_k-u_s)  # Involving z_k which is now |u_k - u_s|
+        k0 = varrho_g * norm_x_k 
+        lhs1 = gp.LinExpr()
+        lhs1.add(B_d * u_k)
+        lhs1.add(varrho_g * norm_x_k_x_s * abs(u_s[0]))  # abs(u_s) because it's a scalar
+        lhs1.add(varrho_f * norm_x_k_x_s)
+        lhs1.add(-B_d * u_s[0])
+        lhs1.add(x_s_next[0])
+        lhs1.add((k1 + k2 + k3-1)*a_k)
+        lhs1.add(Delta_a_k_i_minus_1)
+        lhs1.add((k1 + k2 + k3) * (gamma*Delta_a_k_i_minus_1 - a_k_gamma_i_minus_1))
+        lhs1.add(- (k3 * k1 + k3 * k2 + k2 * k1) * (tau**-1) * delta_v_k)
+        lhs1.add(- k3 * k2 * k1 * (tau**-2) * (delta_p_k - d_min))
+
+        # Add the constraint to the model
+        model.addConstr(lhs - violation <= -lhs1/k0, "constraint")
+        # Add the constraint to the model
+        model.addConstr(lhs + violation >= lhs1/k0, "constraint")
+
+        
+        # Add a constraint to limit the violation to a certain threshold
+        max_violation = 0.1  # Set a maximum allowable violation
+        model.addConstr(violation <= max_violation, "violation_limit")
+        
+        # Solve the model
+
+
+        try:
+            # Solve the model
+            model.optimize()
+            
+            if model.status == GRB.OPTIMAL:
+                # After solving, print the optimal solution for debugging
+                optimal_u_k = u_k.X
+                optimal_violation = violation.X
+                
+                print(f"Optimal u_k: {optimal_u_k}")
+                print(f"Optimal violation: {optimal_violation}")
+
+                # Recalculate lhs and lhs1 using the optimal value of u_k
+                lhs_value = optimal_u_k - u_s[0]
+                lhs1_value = (
+                    B_d * optimal_u_k +
+                    varrho_g * norm_x_k_x_s * abs(u_s[0]) +
+                    varrho_f * norm_x_k_x_s -
+                    B_d * u_s[0] +
+                    x_s_next[0] +
+                    (k1 + k2 + k3 - 1) * a_k +
+                    Delta_a_k_i_minus_1 +
+                    (k1 + k2 + k3) * (gamma * Delta_a_k_i_minus_1 - a_k_gamma_i_minus_1) -
+                    (k3 * k1 + k3 * k2 + k2 * k1) * (tau ** -1) * delta_v_k -
+                    k3 * k2 * k1 * (tau ** -2) * (delta_p_k - d_min)
+                )
+
+                print(f"Evaluated k0: {k0}")
+                print(f"Evaluated lhs: {lhs_value},{lhs1_value/k0}")
+                print(f"Evaluated lhs1: {lhs1_value}")
+                print(f"Evaluated violation: {optimal_violation}")
+
+            # Get the optimal value of u_k
+            optimal_u_k = u_k.X
+            # print(f"Unsafe control {u}, Optimal value of U safe: {optimal_u_k}",violation.X)
+            out = np.clip(optimal_u_k, u_lim[0], u_lim[1])
+            
+            # Print the total sum
+            print("\n output:", out, u)
+            print('****************\n')
+            
+        except gp.GurobiError as e:
+            print(f"Gurobi error: {e}")
+            print(f"u:{u}\n")
+            out = u
+        except Exception as e:
+            print(f"General error: {e}")
+            print(f"u:{u}\n")
             out = u
 
         return out
