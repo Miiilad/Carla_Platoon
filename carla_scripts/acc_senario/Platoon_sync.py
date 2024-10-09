@@ -51,7 +51,7 @@ fixed_delta_seconds = 1/200 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 0,'save_data':1, 'load_data':1, 'load_model':1, 'train_model': 0, 'save_model':1,'run_simulation': 1,  'random_spawn':0}
+setting={"CBF" : 0,'save_data':0, 'load_data':1, 'load_model':1, 'train_model': 0, 'save_model':1,'run_simulation': 1,  'random_spawn':0}
 
 # attacker
 from utils.attacker import configs
@@ -143,7 +143,7 @@ prev_run_time = 0
 
 
 # Spawn the lead vehicle
-list_of_vehicles = ['vehicle.bmw.grandtourer','vehicle.dodge.charger_2020'] #'vehicle.tesla.cybertruck','vehicle.toyota.prius','vehicle.carlamotors.carlacola','vehicle.dodge.charger_2020','vehicle.tesla.model3'
+list_of_vehicles = ['vehicle.bmw.grandtourer','vehicle.dodge.charger_2020'] #,'vehicle.tesla.cybertruck' 'vehicle.tesla.cybertruck','vehicle.toyota.prius','vehicle.carlamotors.carlacola','vehicle.dodge.charger_2020','vehicle.tesla.model3'
 len_of_platoon=len(list_of_vehicles)-1
 lead_car = mCar(client, type= list_of_vehicles[0],spawn_point=spawn_point, name='leader')
 world.tick() 
@@ -163,19 +163,20 @@ for i in range(len_of_platoon):
             print('Model not found')
             loaded_NN_model =False
 
-    # net.train_network()
+    if setting["load_data"]:
+        try: 
+            x_data,u_data, output_data = net[i].load_and_slice_training_data()
+        except: 
+            print('Data not found')
+    
     if setting["train_model"]:
         try: 
             net[i].train_network()
             if setting["save_model"]: net[i].save_model()
             loaded_NN_model =True
         except: 
-            print('Data not found')
-    if setting["load_data"]:
-        try: 
-            x_data,u_data, output_data = net[i].load_and_slice_training_data()
-        except: 
-            print('Data not found')
+            print('Could not Train the Model')
+
 
 
 if not setting["run_simulation"]: sys.exit("Done")
@@ -339,6 +340,10 @@ def loop_5ms_loop(previous_loc_rot,loop_name="5ms loop", run_time=None):
         current_loc_rot = ego_car[i].get_transform_vec()
         current_loc_rot_list. append(current_loc_rot)
         
+        #Slip ratio is clculated
+        steering_angle = ego_car[i].get_steering_angle()
+        gear = ego_car[i]._gear
+
         #Measure Slope of road and yaw_rate as disturbance
         slope = ego_car[i].calculate_slope(previous_loc_rot[i].location,current_loc_rot.location)
         # yaw_rate = ego_car[i].calculate_yaw_rate(previous_loc_rot[i].rotation,current_loc_rot.rotation)
@@ -450,12 +455,16 @@ def outer_control_loop(x_measure_list,acceleration_list,loop_name="10ms loop", t
         
         
         closest_idx = Controller_mpc[i].find_closest_sample(x_data,x_measure_list[i])
-        u_BF = Controller_mpc[i].resilient_solve_BF_for_u(input_acceleration[i],u_lim, x_measure_list[i],
+        # u_BF = Controller_mpc[i].resilient_solve_BF_for_u(input_acceleration[i],u_lim, x_measure_list[i],
+        #                                                   output_data[closest_idx], x_data[closest_idx],u_data[closest_idx],
+        #                                                   acceleration_list[i],velocity_error,distance_error,acceleration_front_vehicle,1,0)
+        u_BF1 = Controller_mpc[i].resilient_solve_BF_for_u1(input_acceleration[i],u_lim, x_measure_list[i],
                                                           output_data[closest_idx], x_data[closest_idx],u_data[closest_idx],
-                                                          acceleration_list[i],velocity_error,distance_error,acceleration_front_vehicle,1,3)
+                                                          acceleration_list[i],velocity_error,distance_error,acceleration_front_vehicle,1,0)
+        print('**************************************************************',distance,u_BF1)
         # if abs(u_BF - input_acceleration[i])>0.01: print('safe u',u_BF,input_acceleration[i])
         # if u_BF >= -1 and u_BF <= 1 : input_acceleration[i] = u_BF
-        input_acceleration[i] = u_BF
+        input_acceleration[i] = u_BF1
 
         
         # print(">>>>",i, input_acceleration[i])
