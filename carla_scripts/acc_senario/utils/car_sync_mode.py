@@ -219,6 +219,16 @@ class mCar:
         else:
             slope = math.asin(dz/r)*180
         return slope
+    def get_steering_angle(self):
+            # To get the steering angle, you can use get_control() method
+            control = self.vehicle.get_control()
+
+            # The steering angle is available as a property of the control object
+            steering_angle = control.steer
+
+            return steering_angle
+
+    
     def calculate_yaw_rate(self,rot1,rot2):
         return (rot2.yaw - rot1.yaw)*180
     

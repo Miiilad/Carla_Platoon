@@ -51,7 +51,7 @@ fixed_delta_seconds = 1/200 # 200Hz
 settings.fixed_delta_seconds = fixed_delta_seconds
 
 
-setting={"CBF" : 0,'save_data':0, 'load_data':1, 'load_model':1, 'train_model': 0, 'save_model':1,'run_simulation': 1,  'random_spawn':0}
+setting={"CBF" : 0,'save_data':1, 'load_data':1, 'load_model':1, 'train_model': 1, 'save_model':1,'run_simulation': 1,  'random_spawn':0}
 
 # attacker
 from utils.attacker import configs
@@ -151,7 +151,7 @@ world.tick()
 
 
 # Initialize and train the network
-dim_n = 4
+dim_n = 6
 net = [MyNeuralNetwork(n=dim_n,path=f"./data/{list_of_vehicles[i+1][8:]}/") for i in range(len_of_platoon)]
 
 for i in range(len_of_platoon):
@@ -351,7 +351,7 @@ def loop_5ms_loop(previous_loc_rot,loop_name="5ms loop", run_time=None):
         
         # print(yaw_rate)
         # print(ego_car[i]._location,ego_car[i].get_speed(),imu_data[i][0])
-        x_k_list.append(np.array([ ego_car[i].get_speed(),imu_data[i][0],slope,yaw_rate])) 
+        x_k_list.append(np.array([ ego_car[i].get_speed(),imu_data[i][0],slope,yaw_rate,steering_angle,gear])) 
         data_to_send["custom data"]["acceleration"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x
         data_to_send["custom2"]["acceleration without filtered"]["{}:x".format(i)] = ego_car[i].imu_data.accelerometer.x#ego_car[i]._acceleration.x
         # get the yaw angle of the vehicle
@@ -454,17 +454,18 @@ def outer_control_loop(x_measure_list,acceleration_list,loop_name="10ms loop", t
         if setting["CBF"]: input_acceleration[i]=Controller_mpc[i].Safe_Control(net[i],x_measure_list[i][:3],input_acceleration[i],acceleration_front_vehicle,u_lim)
         
         
-        closest_idx = Controller_mpc[i].find_closest_sample(x_data,x_measure_list[i])
-        # u_BF = Controller_mpc[i].resilient_solve_BF_for_u(input_acceleration[i],u_lim, x_measure_list[i],
-        #                                                   output_data[closest_idx], x_data[closest_idx],u_data[closest_idx],
-        #                                                   acceleration_list[i],velocity_error,distance_error,acceleration_front_vehicle,1,0)
-        u_BF1 = Controller_mpc[i].resilient_solve_BF_for_u1(input_acceleration[i],u_lim, x_measure_list[i],
-                                                          output_data[closest_idx], x_data[closest_idx],u_data[closest_idx],
-                                                          acceleration_list[i],velocity_error,distance_error,acceleration_front_vehicle,1,0)
-        print('**************************************************************',distance,u_BF1)
-        # if abs(u_BF - input_acceleration[i])>0.01: print('safe u',u_BF,input_acceleration[i])
-        # if u_BF >= -1 and u_BF <= 1 : input_acceleration[i] = u_BF
-        input_acceleration[i] = u_BF1
+        if 'x_data' in globals():
+            closest_idx = Controller_mpc[i].find_closest_sample(x_data,x_measure_list[i])
+            # u_BF = Controller_mpc[i].resilient_solve_BF_for_u(input_acceleration[i],u_lim, x_measure_list[i],
+            #                                                   output_data[closest_idx], x_data[closest_idx],u_data[closest_idx],
+            #                                                   acceleration_list[i],velocity_error,distance_error,acceleration_front_vehicle,1,0)
+            u_BF1 = Controller_mpc[i].resilient_solve_BF_for_u1(input_acceleration[i],u_lim, x_measure_list[i],
+                                                            output_data[closest_idx], x_data[closest_idx],u_data[closest_idx],
+                                                            acceleration_list[i],velocity_error,distance_error,acceleration_front_vehicle,1,0)
+            print('**************************************************************',distance,u_BF1)
+            # if abs(u_BF - input_acceleration[i])>0.01: print('safe u',u_BF,input_acceleration[i])
+            # if u_BF >= -1 and u_BF <= 1 : input_acceleration[i] = u_BF
+            input_acceleration[i] = u_BF1
 
         
         # print(">>>>",i, input_acceleration[i])
@@ -509,7 +510,7 @@ Objective = Objective(Q, R)
 
 # Define the controller
 h=0.1
-sim_duration = 50
+sim_duration = 200
 prediction_H = 20
 control_H = 10
 u_lim= [-1,1]
@@ -568,6 +569,7 @@ while True:
             for i in range(len_of_platoon):
                 safe_distance_for_data=7
                 gear[i] = ego_car[i]._gear
+                gear[i] = 3
                 if gear[i] == 3:
                     #This learns increaments on acceleration i.e dx. 
                     input = np.append(x_measure_list_previous[i],u_implemented[i])
@@ -595,7 +597,7 @@ while True:
                     prediction = [0]
 
 
-                sim_results[i].record_state(run_time,x_k_list[i].tolist()+[input_acceleration[i]] + ground_truth + prediction )
+                sim_results[i].record_state(run_time,x_k_list[i].tolist()[:4]+[input_acceleration[i]] + ground_truth + prediction )
 
 
                 # if ego_car[i]._gear==3: 
